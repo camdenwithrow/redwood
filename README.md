@@ -70,7 +70,7 @@ rw list                 Show worktrees, ports, and running state
 - [x] Define a small allocation file stored under the shared Git directory.
 - [x] Assign each new worktree the lowest available stable numeric slot.
 - [x] Preserve a worktree's slot across repeated Redwood invocations.
-- [ ] Reconcile stored allocations with worktrees discovered from Git.
+- [x] Reconcile stored allocations with worktrees discovered from Git.
 - [ ] Calculate every configured service port as `base + slot * port_stride`.
 - [x] Define and document the port environment variable names passed to commands.
 - [ ] Test stable allocation, multiple worktrees, and port calculations.
