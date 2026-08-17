@@ -5,11 +5,18 @@ import (
 
 	"github.com/camdenwithrow/redwood/internal/allocation"
 	"github.com/camdenwithrow/redwood/internal/repository"
+	"github.com/camdenwithrow/redwood/internal/session"
+	"github.com/camdenwithrow/redwood/internal/tmux"
 )
 
 type Info struct {
 	Worktree repository.Worktree
 	Slot     *int
+	Running  bool
+}
+
+type sessionChecker interface {
+	HasSession(name string) (bool, error)
 }
 
 func List(repo repository.Repository) ([]Info, error) {
@@ -23,7 +30,12 @@ func List(repo repository.Repository) ([]Info, error) {
 		return nil, fmt.Errorf("reconcile worktree slots: %w", err)
 	}
 
-	return combine(worktrees, state)
+	listed, err := combine(worktrees, state)
+	if err != nil {
+		return nil, err
+	}
+
+	return addRunningState(repo, listed, tmux.NewClient())
 }
 
 func combine(worktrees []repository.Worktree, state allocation.State) ([]Info, error) {
@@ -38,6 +50,19 @@ func combine(worktrees []repository.Worktree, state allocation.State) ([]Info, e
 			entry.Slot = &slot
 		}
 		listed = append(listed, entry)
+	}
+
+	return listed, nil
+}
+
+func addRunningState(repo repository.Repository, listed []Info, checker sessionChecker) ([]Info, error) {
+	for i := range listed {
+		name := session.Name(repo, listed[i].Worktree)
+		running, err := checker.HasSession(name)
+		if err != nil {
+			return nil, fmt.Errorf("check tmux session for worktree %q: %w", listed[i].Worktree.Path, err)
+		}
+		listed[i].Running = running
 	}
 
 	return listed, nil

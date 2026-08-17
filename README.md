@@ -99,7 +99,7 @@ rw list                 Show worktrees, ports, and running state
 ### 6. `rw list`
 
 - [x] Combine discovered Git worktrees with stored slot allocations.
-- [ ] Check tmux to determine whether each worktree session is running.
+- [x] Check tmux to determine whether each worktree session is running.
 - [ ] Display branch, path, slot, service ports, and running state.
 - [ ] Keep output readable and useful in scripts without adding a TUI.
 

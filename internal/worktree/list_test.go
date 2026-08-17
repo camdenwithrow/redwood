@@ -1,11 +1,20 @@
 package worktree
 
 import (
+	"errors"
+	"slices"
 	"testing"
 
 	"github.com/camdenwithrow/redwood/internal/allocation"
 	"github.com/camdenwithrow/redwood/internal/repository"
+	"github.com/camdenwithrow/redwood/internal/session"
 )
+
+type sessionCheckerFunc func(name string) (bool, error)
+
+func (check sessionCheckerFunc) HasSession(name string) (bool, error) {
+	return check(name)
+}
 
 func TestCombineWorktreesWithSlots(t *testing.T) {
 	worktrees := []repository.Worktree{
@@ -45,5 +54,49 @@ func TestCombineRejectsMissingBranchSlot(t *testing.T) {
 	}
 	if got, want := err.Error(), `branch "main" has no allocated slot`; got != want {
 		t.Fatalf("combine() error = %q, want %q", got, want)
+	}
+}
+
+func TestAddRunningStateChecksEveryWorktreeSession(t *testing.T) {
+	repo := repository.Repository{Name: "redwood", GitDir: "/repo/.git"}
+	listed := []Info{
+		{Worktree: repository.Worktree{Path: "/repo", Branch: "main"}},
+		{Worktree: repository.Worktree{Path: "/repo-feature-a", Branch: "feature/a"}},
+	}
+	runningName := session.Name(repo, listed[1].Worktree)
+	var checked []string
+	checker := sessionCheckerFunc(func(name string) (bool, error) {
+		checked = append(checked, name)
+		return name == runningName, nil
+	})
+
+	withState, err := addRunningState(repo, listed, checker)
+	if err != nil {
+		t.Fatalf("addRunningState() error = %v", err)
+	}
+	wantNames := []string{
+		session.Name(repo, listed[0].Worktree),
+		session.Name(repo, listed[1].Worktree),
+	}
+	if !slices.Equal(checked, wantNames) {
+		t.Fatalf("addRunningState() checked = %v, want %v", checked, wantNames)
+	}
+	if withState[0].Running || !withState[1].Running {
+		t.Fatalf("addRunningState() running states = %v, %v; want false, true", withState[0].Running, withState[1].Running)
+	}
+}
+
+func TestAddRunningStateReportsTmuxError(t *testing.T) {
+	listed := []Info{{Worktree: repository.Worktree{Path: "/repo", Branch: "main"}}}
+	checker := sessionCheckerFunc(func(string) (bool, error) {
+		return false, errors.New("tmux unavailable")
+	})
+
+	_, err := addRunningState(repository.Repository{}, listed, checker)
+	if err == nil {
+		t.Fatal("addRunningState() error = nil, want tmux error")
+	}
+	if got, want := err.Error(), `check tmux session for worktree "/repo": tmux unavailable`; got != want {
+		t.Fatalf("addRunningState() error = %q, want %q", got, want)
 	}
 }
