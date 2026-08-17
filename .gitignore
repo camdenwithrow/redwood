@@ -1,0 +1,22 @@
+# Build output
+/redwood
+/bin/
+*.exe
+*.test
+*.out
+
+# Test and coverage artifacts
+coverage.out
+coverage.html
+
+# Local Go workspace files
+go.work
+go.work.sum
+
+# Local configuration and tooling
+.env
+.env.*
+.DS_Store
+
+# Repository-local agent instructions
+AGENTS.md
