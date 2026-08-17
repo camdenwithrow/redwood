@@ -73,7 +73,7 @@ rw list                 Show worktrees, ports, and running state
 - [x] Reconcile stored allocations with worktrees discovered from Git.
 - [x] Calculate every configured service port as `base + slot * port_stride`.
 - [x] Define and document the port environment variable names passed to commands.
-- [ ] Test stable allocation, multiple worktrees, and port calculations.
+- [x] Test stable allocation, multiple worktrees, and port calculations.
 
 ### 4. `rw create`
 
