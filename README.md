@@ -46,7 +46,7 @@ rw list                 Show worktrees, ports, and running state
 ### 1. CLI foundation
 
 - [x] Create the `rw` executable and command dispatcher in Go.
-- [ ] Add consistent usage text, validation, and actionable error messages.
+- [x] Add consistent usage text, validation, and actionable error messages.
 - [ ] Locate and validate the main repository checkout for every command.
 - [ ] Load the committed `redwood.toml` and validate its required fields.
 - [ ] Add focused tests for command parsing and invalid configuration.
