@@ -19,8 +19,11 @@ func TestDiscoverFromMainCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DiscoverFrom() error = %v", err)
 	}
-	if discovered.Root != repositoryRoot {
-		t.Fatalf("DiscoverFrom() root = %q, want %q", discovered.Root, repositoryRoot)
+	if discovered.Name != "repository" {
+		t.Fatalf("DiscoverFrom() name = %q, want %q", discovered.Name, "repository")
+	}
+	if discovered.MainCheckout != repositoryRoot {
+		t.Fatalf("DiscoverFrom() main checkout = %q, want %q", discovered.MainCheckout, repositoryRoot)
 	}
 	if want := filepath.Join(repositoryRoot, ".git"); discovered.GitDir != want {
 		t.Fatalf("DiscoverFrom() GitDir = %q, want %q", discovered.GitDir, want)
@@ -70,7 +73,11 @@ func TestResolveBaseBranch(t *testing.T) {
 			}
 
 			resolved, err := ResolveBaseBranch(
-				Repository{Root: repositoryRoot, GitDir: filepath.Join(repositoryRoot, ".git")},
+				Repository{
+					Name:         "repository",
+					MainCheckout: repositoryRoot,
+					GitDir:       filepath.Join(repositoryRoot, ".git"),
+				},
 				test.configured,
 			)
 			if test.wantError != "" {

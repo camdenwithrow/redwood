@@ -16,8 +16,9 @@ func TestListWorktrees(t *testing.T) {
 	}
 
 	worktrees, err := ListWorktrees(Repository{
-		Root:   repositoryRoot,
-		GitDir: filepath.Join(repositoryRoot, ".git"),
+		Name:         "repository",
+		MainCheckout: repositoryRoot,
+		GitDir:       filepath.Join(repositoryRoot, ".git"),
 	})
 	if err != nil {
 		t.Fatalf("ListWorktrees() error = %v", err)

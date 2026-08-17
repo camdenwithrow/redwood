@@ -136,7 +136,11 @@ func TestRunReportsBaseBranchResolutionError(t *testing.T) {
 }
 
 func successfulRepositoryFinder() (repository.Repository, error) {
-	return repository.Repository{Root: "/repo", GitDir: "/repo/.git"}, nil
+	return repository.Repository{
+		Name:         "repo",
+		MainCheckout: "/repo",
+		GitDir:       "/repo/.git",
+	}, nil
 }
 
 func successfulConfigLoader(string) (config.Config, error) {

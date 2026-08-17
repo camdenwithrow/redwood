@@ -15,10 +15,11 @@ const (
 	masterBranch = "master"
 )
 
-// Repository describes the main checkout and its shared Git directory.
+// Repository identifies a repository's primary checkout and shared Git data.
 type Repository struct {
-	Root   string
-	GitDir string
+	Name         string
+	MainCheckout string
+	GitDir       string
 }
 
 // Discover locates and validates the main checkout containing the current
@@ -57,14 +58,18 @@ func DiscoverFrom(start string) (Repository, error) {
 		)
 	}
 
-	return Repository{Root: root, GitDir: gitDir}, nil
+	return Repository{
+		Name:         filepath.Base(root),
+		MainCheckout: root,
+		GitDir:       gitDir,
+	}, nil
 }
 
 // ResolveBaseBranch verifies a configured local base branch or auto-detects
 // main or master when configured is empty.
 func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 	if configured != "" {
-		exists, err := localBranchExists(repo.Root, configured)
+		exists, err := localBranchExists(repo.MainCheckout, configured)
 		if err != nil {
 			return "", err
 		}
@@ -75,11 +80,11 @@ func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 		return configured, nil
 	}
 
-	hasMain, err := localBranchExists(repo.Root, mainBranch)
+	hasMain, err := localBranchExists(repo.MainCheckout, mainBranch)
 	if err != nil {
 		return "", err
 	}
-	hasMaster, err := localBranchExists(repo.Root, masterBranch)
+	hasMaster, err := localBranchExists(repo.MainCheckout, masterBranch)
 	if err != nil {
 		return "", err
 	}

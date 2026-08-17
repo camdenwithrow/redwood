@@ -19,7 +19,7 @@ type Worktree struct {
 
 // ListWorktrees discovers all worktrees that share repo's Git directory.
 func ListWorktrees(repo Repository) ([]Worktree, error) {
-	output, err := gitexec.NewRunner(repo.Root).Output("worktree", "list", "--porcelain")
+	output, err := gitexec.NewRunner(repo.MainCheckout).Output("worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, fmt.Errorf("list Git worktrees: %w", err)
 	}
