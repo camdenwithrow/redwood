@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/camdenwithrow/redwood/internal/allocation"
+	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
 	"github.com/camdenwithrow/redwood/internal/session"
 )
@@ -98,5 +99,28 @@ func TestAddRunningStateReportsTmuxError(t *testing.T) {
 	}
 	if got, want := err.Error(), `check tmux session for worktree "/repo": tmux unavailable`; got != want {
 		t.Fatalf("addRunningState() error = %q, want %q", got, want)
+	}
+}
+
+func TestAddPortsCalculatesPortsForAllocatedWorktrees(t *testing.T) {
+	slot := 2
+	listed := []Info{
+		{Worktree: repository.Worktree{Path: "/repo-feature-a"}, Slot: &slot},
+		{Worktree: repository.Worktree{Path: "/repo-detached", Detached: true}},
+	}
+	configuration := config.Config{
+		PortStride: 100,
+		Ports:      map[string]int{"web": 3000, "api": 8080},
+	}
+
+	withPorts, err := addPorts(configuration, listed)
+	if err != nil {
+		t.Fatalf("addPorts() error = %v", err)
+	}
+	if withPorts[0].Ports["web"] != 3200 || withPorts[0].Ports["api"] != 8280 {
+		t.Fatalf("addPorts() ports = %v, want web=3200 and api=8280", withPorts[0].Ports)
+	}
+	if withPorts[1].Ports != nil {
+		t.Fatalf("addPorts() detached ports = %v, want nil", withPorts[1].Ports)
 	}
 }

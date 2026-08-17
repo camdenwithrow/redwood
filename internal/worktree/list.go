@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/camdenwithrow/redwood/internal/allocation"
+	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
 	"github.com/camdenwithrow/redwood/internal/session"
 	"github.com/camdenwithrow/redwood/internal/tmux"
@@ -12,6 +13,7 @@ import (
 type Info struct {
 	Worktree repository.Worktree
 	Slot     *int
+	Ports    map[string]int
 	Running  bool
 }
 
@@ -19,7 +21,7 @@ type sessionChecker interface {
 	HasSession(name string) (bool, error)
 }
 
-func List(repo repository.Repository) ([]Info, error) {
+func List(repo repository.Repository, configuration config.Config) ([]Info, error) {
 	worktrees, err := repository.ListWorktrees(repo)
 	if err != nil {
 		return nil, err
@@ -31,6 +33,10 @@ func List(repo repository.Repository) ([]Info, error) {
 	}
 
 	listed, err := combine(worktrees, state)
+	if err != nil {
+		return nil, err
+	}
+	listed, err = addPorts(configuration, listed)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +56,21 @@ func combine(worktrees []repository.Worktree, state allocation.State) ([]Info, e
 			entry.Slot = &slot
 		}
 		listed = append(listed, entry)
+	}
+
+	return listed, nil
+}
+
+func addPorts(configuration config.Config, listed []Info) ([]Info, error) {
+	for i := range listed {
+		if listed[i].Slot == nil {
+			continue
+		}
+		ports, err := allocation.CalculatePorts(configuration, *listed[i].Slot)
+		if err != nil {
+			return nil, fmt.Errorf("calculate ports for worktree %q: %w", listed[i].Worktree.Path, err)
+		}
+		listed[i].Ports = ports
 	}
 
 	return listed, nil

@@ -20,6 +20,7 @@ type worktreeCreator func(repo repository.Repository, configuration config.Confi
 type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
 type sessionAttacher func(repo repository.Repository, branch string) error
 type sessionStopper func(repo repository.Repository, branch string) (string, error)
+type worktreeLister func(repo repository.Repository, configuration config.Config) ([]worktreemanager.Info, error)
 
 type runtimeDependencies struct {
 	findRepository    repositoryFinder
@@ -29,6 +30,7 @@ type runtimeDependencies struct {
 	startSession      sessionStarter
 	attachSession     sessionAttacher
 	stopSession       sessionStopper
+	listWorktrees     worktreeLister
 }
 
 type commandEnvironment struct {
@@ -39,6 +41,7 @@ type commandEnvironment struct {
 	start      sessionStarter
 	attach     sessionAttacher
 	stop       sessionStopper
+	list       worktreeLister
 }
 
 type commandSpec struct {
@@ -66,7 +69,7 @@ var commandSpecs = []commandSpec{
 	{name: "start", arguments: "<branch>", argCount: 1, run: startSession},
 	{name: "attach", arguments: "<branch>", argCount: 1, run: attachSession},
 	{name: "stop", arguments: "<branch>", argCount: 1, run: stopSession},
-	{name: "list", argCount: 0, run: notImplemented("list")},
+	{name: "list", argCount: 0, run: listWorktrees},
 }
 
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -78,6 +81,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		startSession:      session.Start,
 		attachSession:     session.Attach,
 		stopSession:       session.Stop,
+		listWorktrees:     worktreemanager.List,
 	})
 }
 
@@ -145,6 +149,7 @@ func run(
 		start:      deps.startSession,
 		attach:     deps.attachSession,
 		stop:       deps.stopSession,
+		list:       deps.listWorktrees,
 	}
 	if err := spec.run(commandArgs, environment); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
@@ -202,10 +207,44 @@ func createWorktree(args []string, environment commandEnvironment) error {
 	return nil
 }
 
-func notImplemented(name string) command {
-	return func(_ []string, _ commandEnvironment) error {
-		return fmt.Errorf("%s is not implemented yet", name)
+func listWorktrees(_ []string, environment commandEnvironment) error {
+	listed, err := environment.list(environment.repository, environment.config)
+	if err != nil {
+		return err
 	}
+
+	for index, info := range listed {
+		if index > 0 {
+			fmt.Fprintln(environment.stdout)
+		}
+		branch := info.Worktree.Branch
+		if branch == "" {
+			branch = "(detached)"
+		}
+		fmt.Fprintf(environment.stdout, "Branch: %s\n", branch)
+		fmt.Fprintf(environment.stdout, "Path: %s\n", info.Worktree.Path)
+		if info.Slot == nil {
+			fmt.Fprintln(environment.stdout, "Slot: -")
+		} else {
+			fmt.Fprintf(environment.stdout, "Slot: %d\n", *info.Slot)
+		}
+		fmt.Fprintln(environment.stdout, "Ports:")
+		labels := make([]string, 0, len(info.Ports))
+		for label := range info.Ports {
+			labels = append(labels, label)
+		}
+		sort.Strings(labels)
+		for _, label := range labels {
+			fmt.Fprintf(environment.stdout, "  %s: %d\n", label, info.Ports[label])
+		}
+		running := "no"
+		if info.Running {
+			running = "yes"
+		}
+		fmt.Fprintf(environment.stdout, "Running: %s\n", running)
+	}
+
+	return nil
 }
 
 func findCommand(name string) (*commandSpec, bool) {
