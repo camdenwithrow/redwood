@@ -9,7 +9,6 @@ import (
 
 const localBranchPrefix = "refs/heads/"
 
-// Worktree describes one entry reported by git worktree list.
 type Worktree struct {
 	Path     string
 	Commit   string
@@ -17,7 +16,6 @@ type Worktree struct {
 	Detached bool
 }
 
-// ListWorktrees discovers all worktrees that share repo's Git directory.
 func ListWorktrees(repo Repository) ([]Worktree, error) {
 	output, err := gitexec.NewRunner(repo.MainCheckout).Output("worktree", "list", "--porcelain")
 	if err != nil {

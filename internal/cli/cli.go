@@ -53,8 +53,6 @@ var commandSpecs = []commandSpec{
 	{name: "list", argCount: 0, run: notImplemented("list")},
 }
 
-// Run dispatches args to the requested Redwood command and returns a process
-// exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
 	return run(args, stdout, stderr, runtimeDependencies{
 		findRepository:    repository.Discover,
