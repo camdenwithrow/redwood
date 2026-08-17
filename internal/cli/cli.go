@@ -7,6 +7,7 @@ import (
 
 	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
+	"github.com/camdenwithrow/redwood/internal/session"
 	worktreemanager "github.com/camdenwithrow/redwood/internal/worktree"
 )
 
@@ -16,12 +17,18 @@ type repositoryFinder func() (repository.Repository, error)
 type configLoader func(repositoryRoot string) (config.Config, error)
 type baseBranchResolver func(repo repository.Repository, configured string) (string, error)
 type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
+type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
+type sessionAttacher func(repo repository.Repository, branch string) error
+type sessionStopper func(repo repository.Repository, branch string) (string, error)
 
 type runtimeDependencies struct {
 	findRepository    repositoryFinder
 	loadConfig        configLoader
 	resolveBaseBranch baseBranchResolver
 	createWorktree    worktreeCreator
+	startSession      sessionStarter
+	attachSession     sessionAttacher
+	stopSession       sessionStopper
 }
 
 type commandEnvironment struct {
@@ -29,6 +36,9 @@ type commandEnvironment struct {
 	config     config.Config
 	stdout     io.Writer
 	create     worktreeCreator
+	start      sessionStarter
+	attach     sessionAttacher
+	stop       sessionStopper
 }
 
 type commandSpec struct {
@@ -53,9 +63,9 @@ Run "rw help" to show this message.
 
 var commandSpecs = []commandSpec{
 	{name: "create", arguments: "<branch>", argCount: 1, run: createWorktree},
-	{name: "start", arguments: "<branch>", argCount: 1, run: notImplemented("start")},
-	{name: "attach", arguments: "<branch>", argCount: 1, run: notImplemented("attach")},
-	{name: "stop", arguments: "<branch>", argCount: 1, run: notImplemented("stop")},
+	{name: "start", arguments: "<branch>", argCount: 1, run: startSession},
+	{name: "attach", arguments: "<branch>", argCount: 1, run: attachSession},
+	{name: "stop", arguments: "<branch>", argCount: 1, run: stopSession},
 	{name: "list", argCount: 0, run: notImplemented("list")},
 }
 
@@ -65,6 +75,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		loadConfig:        config.Load,
 		resolveBaseBranch: repository.ResolveBaseBranch,
 		createWorktree:    worktreemanager.Create,
+		startSession:      session.Start,
+		attachSession:     session.Attach,
+		stopSession:       session.Stop,
 	})
 }
 
@@ -129,6 +142,9 @@ func run(
 		config:     loadedConfig,
 		stdout:     stdout,
 		create:     deps.createWorktree,
+		start:      deps.startSession,
+		attach:     deps.attachSession,
+		stop:       deps.stopSession,
 	}
 	if err := spec.run(commandArgs, environment); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
@@ -136,6 +152,32 @@ func run(
 	}
 
 	return 0
+}
+
+func attachSession(args []string, environment commandEnvironment) error {
+	return environment.attach(environment.repository, args[0])
+}
+
+func stopSession(args []string, environment commandEnvironment) error {
+	name, err := environment.stop(environment.repository, args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(environment.stdout, "Stopped tmux session %s\n", name)
+	return nil
+}
+
+func startSession(args []string, environment commandEnvironment) error {
+	started, err := environment.start(environment.repository, environment.config, args[0])
+	if err != nil {
+		return err
+	}
+	if started.AlreadyRunning {
+		fmt.Fprintf(environment.stdout, "Tmux session already running: %s\n", started.Name)
+		return nil
+	}
+	fmt.Fprintf(environment.stdout, "Started tmux session %s\n", started.Name)
+	return nil
 }
 
 func createWorktree(args []string, environment commandEnvironment) error {

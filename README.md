@@ -86,15 +86,15 @@ rw list                 Show worktrees, ports, and running state
 
 ### 5. tmux session lifecycle
 
-- [ ] Generate a deterministic, collision-safe tmux session name per worktree.
-- [ ] Implement `rw start` with one detached session per worktree.
-- [ ] Create one tmux window per configured command.
-- [ ] Run every command from the selected worktree directory.
-- [ ] Supply only the calculated port environment variables to each command.
-- [ ] Make `rw start` report an already-running session without duplicating it.
-- [ ] Implement `rw attach` for the selected worktree's session.
-- [ ] Implement `rw stop` by terminating the selected worktree's session.
-- [ ] Report clear errors when tmux is unavailable or a session is not running.
+- [x] Generate a deterministic, collision-safe tmux session name per worktree.
+- [x] Implement `rw start` with one detached session per worktree.
+- [x] Create one tmux window per configured command.
+- [x] Run every command from the selected worktree directory.
+- [x] Supply only the calculated port environment variables to each command.
+- [x] Make `rw start` report an already-running session without duplicating it.
+- [x] Implement `rw attach` for the selected worktree's session.
+- [x] Implement `rw stop` by terminating the selected worktree's session.
+- [x] Report clear errors when tmux is unavailable or a session is not running.
 
 ### 6. `rw list`
 
