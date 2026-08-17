@@ -15,15 +15,12 @@ const (
 	masterBranch = "master"
 )
 
-// Repository identifies a repository's primary checkout and shared Git data.
 type Repository struct {
 	Name         string
 	MainCheckout string
 	GitDir       string
 }
 
-// Discover locates and validates the main checkout containing the current
-// working directory.
 func Discover() (Repository, error) {
 	workingDirectory, err := os.Getwd()
 	if err != nil {
@@ -33,8 +30,6 @@ func Discover() (Repository, error) {
 	return DiscoverFrom(workingDirectory)
 }
 
-// DiscoverFrom locates a repository from start and verifies that start belongs
-// to its main checkout rather than a linked worktree.
 func DiscoverFrom(start string) (Repository, error) {
 	runner := gitexec.NewRunner(start)
 	root, err := runner.Output("rev-parse", "--show-toplevel")
@@ -65,8 +60,6 @@ func DiscoverFrom(start string) (Repository, error) {
 	}, nil
 }
 
-// ResolveBaseBranch verifies a configured local base branch or auto-detects
-// main or master when configured is empty.
 func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 	if configured != "" {
 		exists, err := localBranchExists(repo.MainCheckout, configured)

@@ -19,28 +19,23 @@ const (
 	formatVersion = 1
 )
 
-// State is the persisted mapping from branch names to stable numeric slots.
 type State struct {
 	Version int            `toml:"version"`
 	Slots   map[string]int `toml:"slots"`
 }
 
-// Store persists allocation state inside a repository's shared Git directory.
 type Store struct {
 	path string
 }
 
-// NewStore creates an allocation store for repo.
 func NewStore(repo repository.Repository) Store {
 	return Store{path: filepath.Join(repo.GitDir, directoryName, fileName)}
 }
 
-// Path returns the allocation file path.
 func (store Store) Path() string {
 	return store.path
 }
 
-// Load reads allocation state, returning an empty state when no file exists.
 func (store Store) Load() (State, error) {
 	loaded := newState()
 	metadata, err := toml.DecodeFile(store.path, &loaded)
@@ -70,7 +65,6 @@ func (store Store) Load() (State, error) {
 	return loaded, nil
 }
 
-// Save atomically writes allocation state to the shared Git directory.
 func (store Store) Save(state State) error {
 	if err := state.validate(); err != nil {
 		return fmt.Errorf("save allocations to %s: %w", store.path, err)

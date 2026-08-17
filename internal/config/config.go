@@ -11,7 +11,6 @@ import (
 
 const FileName = "redwood.toml"
 
-// Config contains the repository-specific settings Redwood needs for its MVP.
 type Config struct {
 	BaseBranch   string            `toml:"base_branch"`
 	WorktreePath string            `toml:"worktree_path"`
@@ -20,7 +19,6 @@ type Config struct {
 	Commands     map[string]string `toml:"commands"`
 }
 
-// Load reads and validates redwood.toml from repositoryRoot.
 func Load(repositoryRoot string) (Config, error) {
 	configPath := filepath.Join(repositoryRoot, FileName)
 	loaded := Config{}
