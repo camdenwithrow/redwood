@@ -62,7 +62,7 @@ func DiscoverFrom(start string) (Repository, error) {
 
 func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 	if configured != "" {
-		exists, err := localBranchExists(repo.MainCheckout, configured)
+		exists, err := LocalBranchExists(repo.MainCheckout, configured)
 		if err != nil {
 			return "", err
 		}
@@ -73,11 +73,11 @@ func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 		return configured, nil
 	}
 
-	hasMain, err := localBranchExists(repo.MainCheckout, mainBranch)
+	hasMain, err := LocalBranchExists(repo.MainCheckout, mainBranch)
 	if err != nil {
 		return "", err
 	}
-	hasMaster, err := localBranchExists(repo.MainCheckout, masterBranch)
+	hasMaster, err := LocalBranchExists(repo.MainCheckout, masterBranch)
 	if err != nil {
 		return "", err
 	}
@@ -94,7 +94,7 @@ func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 	}
 }
 
-func localBranchExists(repositoryRoot, branch string) (bool, error) {
+func LocalBranchExists(repositoryRoot, branch string) (bool, error) {
 	ref := "refs/heads/" + branch
 	err := gitexec.NewRunner(repositoryRoot).Run("show-ref", "--verify", "--quiet", ref)
 	if err == nil {

@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/camdenwithrow/redwood/internal/allocation"
@@ -15,6 +16,12 @@ type Created struct {
 }
 
 func Create(repo repository.Repository, configuration config.Config, branch string) (Created, error) {
+	store := allocation.NewStore(repo)
+	previousState, err := store.Load()
+	if err != nil {
+		return Created{}, err
+	}
+
 	path, err := repository.ResolveWorktreePath(repo, configuration.WorktreePath, branch)
 	if err != nil {
 		return Created{}, err
@@ -24,23 +31,33 @@ func Create(repo repository.Repository, configuration config.Config, branch stri
 	if err != nil {
 		return Created{}, err
 	}
+	rollback := func(cause error) error {
+		worktreeErr := repository.RollbackWorktree(
+			repo,
+			createdWorktree.Worktree.Path,
+			branch,
+			createdWorktree.BranchCreated,
+		)
+		allocationErr := store.Save(previousState)
+		return errors.Join(cause, worktreeErr, allocationErr)
+	}
 
 	worktrees, err := repository.ListWorktrees(repo)
 	if err != nil {
-		return Created{}, err
+		return Created{}, rollback(err)
 	}
-	state, err := allocation.NewStore(repo).Reconcile(worktrees)
+	state, err := store.Reconcile(worktrees)
 	if err != nil {
-		return Created{}, fmt.Errorf("allocate worktree slot: %w", err)
+		return Created{}, rollback(fmt.Errorf("allocate worktree slot: %w", err))
 	}
 	slot, exists := state.Slots[branch]
 	if !exists {
-		return Created{}, fmt.Errorf("allocation state has no slot for branch %q", branch)
+		return Created{}, rollback(fmt.Errorf("allocation state has no slot for branch %q", branch))
 	}
 	ports, err := allocation.CalculatePorts(configuration, slot)
 	if err != nil {
-		return Created{}, fmt.Errorf("calculate worktree ports: %w", err)
+		return Created{}, rollback(fmt.Errorf("calculate worktree ports: %w", err))
 	}
 
-	return Created{Worktree: createdWorktree, Slot: slot, Ports: ports}, nil
+	return Created{Worktree: createdWorktree.Worktree, Slot: slot, Ports: ports}, nil
 }

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -36,7 +37,7 @@ func TestCreateWorktreeCreatesBranchFromBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve worktree path: %v", err)
 	}
-	if worktree.Path != canonicalPath || worktree.Branch != "feature/new" || worktree.Commit == "" {
+	if worktree.Worktree.Path != canonicalPath || worktree.Worktree.Branch != "feature/new" || worktree.Worktree.Commit == "" || !worktree.BranchCreated {
 		t.Fatalf("CreateWorktree() = %+v", worktree)
 	}
 	if got, want := gitOutputForTest(t, repositoryRoot, "rev-parse", "feature/new"), gitOutputForTest(t, repositoryRoot, "rev-parse", "main"); got != want {
@@ -57,8 +58,8 @@ func TestCreateWorktreeChecksOutExistingBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree() error = %v", err)
 	}
-	if worktree.Branch != "feature/existing" {
-		t.Fatalf("CreateWorktree() branch = %q, want feature/existing", worktree.Branch)
+	if worktree.Worktree.Branch != "feature/existing" || worktree.BranchCreated {
+		t.Fatalf("CreateWorktree() = %+v, want existing feature/existing branch", worktree)
 	}
 }
 
@@ -76,6 +77,26 @@ func TestCreateWorktreeRejectsExistingPath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("CreateWorktree() error = %q, want existing path context", err)
+	}
+}
+
+func TestCreateWorktreeRollsBackFailedGitCreation(t *testing.T) {
+	repositoryRoot := initializeCommittedRepository(t, "main")
+	repo, err := DiscoverFrom(repositoryRoot)
+	if err != nil {
+		t.Fatalf("DiscoverFrom() error = %v", err)
+	}
+	worktreePath := filepath.Join(t.TempDir(), "feature-new")
+
+	_, err = CreateWorktree(repo, "feature/new", worktreePath, "missing-base")
+	if err == nil {
+		t.Fatal("CreateWorktree() error = nil, want missing base error")
+	}
+	if _, statErr := os.Stat(worktreePath); !os.IsNotExist(statErr) {
+		t.Fatalf("failed worktree path error = %v, want not found", statErr)
+	}
+	if branchExistsForTest(t, repositoryRoot, "feature/new") {
+		t.Fatal("new branch still exists after failed worktree creation")
 	}
 }
 
@@ -177,4 +198,19 @@ func gitOutputForTest(t *testing.T, directory string, args ...string) string {
 		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, output)
 	}
 	return strings.TrimSpace(string(output))
+}
+
+func branchExistsForTest(t *testing.T, directory, branch string) bool {
+	t.Helper()
+
+	command := exec.Command("git", "-C", directory, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	err := command.Run()
+	if err == nil {
+		return true
+	}
+	if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
+		return false
+	}
+	t.Fatalf("check branch %q: %v", branch, err)
+	return false
 }

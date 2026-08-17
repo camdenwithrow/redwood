@@ -75,6 +75,61 @@ func TestCreateDoesNotAllocateWhenGitCreationFails(t *testing.T) {
 	}
 }
 
+func TestCreateRollsBackWorktreeBranchAndAllocation(t *testing.T) {
+	repositoryRoot := initializeRepository(t)
+	repo, err := repository.DiscoverFrom(repositoryRoot)
+	if err != nil {
+		t.Fatalf("DiscoverFrom() error = %v", err)
+	}
+	worktreeParent := t.TempDir()
+	configuration := config.Config{
+		BaseBranch:   "main",
+		WorktreePath: filepath.Join(worktreeParent, "{repo}-{branch}"),
+		Ports:        map[string]int{"frontend": 3000},
+	}
+
+	_, err = Create(repo, configuration, "feature/rollback")
+	if err == nil {
+		t.Fatal("Create() error = nil, want port calculation error")
+	}
+	worktreePath := filepath.Join(worktreeParent, "repository-feature-rollback")
+	if _, statErr := os.Stat(worktreePath); !os.IsNotExist(statErr) {
+		t.Fatalf("rolled back worktree path error = %v, want not found", statErr)
+	}
+	if branchExists(t, repositoryRoot, "feature/rollback") {
+		t.Fatal("created branch still exists after rollback")
+	}
+	state, loadErr := allocation.NewStore(repo).Load()
+	if loadErr != nil {
+		t.Fatalf("Load() error = %v", loadErr)
+	}
+	if len(state.Slots) != 0 {
+		t.Fatalf("Load() slots = %v, want restored empty state", state.Slots)
+	}
+}
+
+func TestCreateRollbackKeepsExistingBranch(t *testing.T) {
+	repositoryRoot := initializeRepository(t)
+	runGit(t, repositoryRoot, "branch", "feature/existing")
+	repo, err := repository.DiscoverFrom(repositoryRoot)
+	if err != nil {
+		t.Fatalf("DiscoverFrom() error = %v", err)
+	}
+	configuration := config.Config{
+		BaseBranch:   "main",
+		WorktreePath: filepath.Join(t.TempDir(), "{repo}-{branch}"),
+		Ports:        map[string]int{"frontend": 3000},
+	}
+
+	_, err = Create(repo, configuration, "feature/existing")
+	if err == nil {
+		t.Fatal("Create() error = nil, want port calculation error")
+	}
+	if !branchExists(t, repositoryRoot, "feature/existing") {
+		t.Fatal("existing branch was deleted during rollback")
+	}
+}
+
 func initializeRepository(t *testing.T) string {
 	t.Helper()
 
@@ -110,4 +165,19 @@ func runGit(t *testing.T, directory string, args ...string) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, output)
 	}
+}
+
+func branchExists(t *testing.T, directory, branch string) bool {
+	t.Helper()
+
+	command := exec.Command("git", "-C", directory, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	err := command.Run()
+	if err == nil {
+		return true
+	}
+	if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
+		return false
+	}
+	t.Fatalf("check branch %q: %v", branch, err)
+	return false
 }

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,20 +10,25 @@ import (
 	gitexec "github.com/camdenwithrow/redwood/internal/git"
 )
 
-func CreateWorktree(repo Repository, branch, path, baseBranch string) (Worktree, error) {
+type CreatedWorktree struct {
+	Worktree      Worktree
+	BranchCreated bool
+}
+
+func CreateWorktree(repo Repository, branch, path, baseBranch string) (CreatedWorktree, error) {
 	if err := ValidateNewWorktree(repo, branch); err != nil {
-		return Worktree{}, err
+		return CreatedWorktree{}, err
 	}
 	if _, err := os.Lstat(path); err == nil {
-		return Worktree{}, fmt.Errorf("worktree path %q already exists", path)
+		return CreatedWorktree{}, fmt.Errorf("worktree path %q already exists", path)
 	} else if !os.IsNotExist(err) {
-		return Worktree{}, fmt.Errorf("inspect worktree path %q: %w", path, err)
+		return CreatedWorktree{}, fmt.Errorf("inspect worktree path %q: %w", path, err)
 	}
 
 	runner := gitexec.NewRunner(repo.MainCheckout)
-	branchExists, err := localBranchExists(repo.MainCheckout, branch)
+	branchExists, err := LocalBranchExists(repo.MainCheckout, branch)
 	if err != nil {
-		return Worktree{}, err
+		return CreatedWorktree{}, err
 	}
 	if branchExists {
 		err = runner.Run("worktree", "add", path, branch)
@@ -30,20 +36,68 @@ func CreateWorktree(repo Repository, branch, path, baseBranch string) (Worktree,
 		err = runner.Run("worktree", "add", "-b", branch, path, baseBranch)
 	}
 	if err != nil {
-		return Worktree{}, fmt.Errorf("create worktree for branch %q: %w", branch, err)
+		cause := fmt.Errorf("create worktree for branch %q: %w", branch, err)
+		return CreatedWorktree{}, errors.Join(cause, rollbackFailedCreation(repo, path, branch, !branchExists))
 	}
+	created := CreatedWorktree{BranchCreated: !branchExists}
 
 	worktrees, err := ListWorktrees(repo)
 	if err != nil {
-		return Worktree{}, err
+		return CreatedWorktree{}, errors.Join(err, RollbackWorktree(repo, path, branch, created.BranchCreated))
 	}
 	for _, worktree := range worktrees {
 		if worktree.Branch == branch {
-			return worktree, nil
+			created.Worktree = worktree
+			return created, nil
 		}
 	}
 
-	return Worktree{}, fmt.Errorf("created branch %q but Git did not report its worktree", branch)
+	cause := fmt.Errorf("created branch %q but Git did not report its worktree", branch)
+	return CreatedWorktree{}, errors.Join(cause, RollbackWorktree(repo, path, branch, created.BranchCreated))
+}
+
+func RollbackWorktree(repo Repository, path, branch string, deleteBranch bool) error {
+	runner := gitexec.NewRunner(repo.MainCheckout)
+	removeErr := runner.Run("worktree", "remove", "--force", path)
+	if !deleteBranch {
+		return removeErr
+	}
+	deleteErr := runner.Run("branch", "-D", branch)
+	return errors.Join(removeErr, deleteErr)
+}
+
+func rollbackFailedCreation(repo Repository, path, branch string, deleteBranch bool) error {
+	var rollbackErrors []error
+	registered := false
+	worktrees, err := ListWorktrees(repo)
+	if err != nil {
+		rollbackErrors = append(rollbackErrors, err)
+	} else {
+		for _, worktree := range worktrees {
+			if worktree.Branch == branch || filepath.Clean(worktree.Path) == filepath.Clean(path) {
+				registered = true
+				break
+			}
+		}
+	}
+
+	if registered {
+		if err := gitexec.NewRunner(repo.MainCheckout).Run("worktree", "remove", "--force", path); err != nil {
+			rollbackErrors = append(rollbackErrors, err)
+		}
+	}
+	if deleteBranch {
+		exists, err := LocalBranchExists(repo.MainCheckout, branch)
+		if err != nil {
+			rollbackErrors = append(rollbackErrors, err)
+		} else if exists {
+			if err := gitexec.NewRunner(repo.MainCheckout).Run("branch", "-D", branch); err != nil {
+				rollbackErrors = append(rollbackErrors, err)
+			}
+		}
+	}
+
+	return errors.Join(rollbackErrors...)
 }
 
 func ResolveWorktreePath(repo Repository, template, branch string) (string, error) {
