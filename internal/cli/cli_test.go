@@ -142,6 +142,20 @@ func TestRunStartReportsExistingSession(t *testing.T) {
 	}
 }
 
+func TestRunStopPrintsSessionName(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	exitCode := run([]string{"stop", "feature/a"}, &stdout, &stderr, successfulDependencies())
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	if got, want := stdout.String(), "Stopped tmux session rw-redwood-main-123456789abc\n"; got != want {
+		t.Fatalf("run() stdout = %q, want %q", got, want)
+	}
+}
+
 func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -224,5 +238,8 @@ func successfulDependencies() runtimeDependencies {
 			return session.Started{Name: "rw-redwood-main-123456789abc"}, nil
 		},
 		attachSession: func(repository.Repository, string) error { return nil },
+		stopSession: func(repository.Repository, string) (string, error) {
+			return "rw-redwood-main-123456789abc", nil
+		},
 	}
 }

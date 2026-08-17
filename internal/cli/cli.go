@@ -19,6 +19,7 @@ type baseBranchResolver func(repo repository.Repository, configured string) (str
 type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
 type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
 type sessionAttacher func(repo repository.Repository, branch string) error
+type sessionStopper func(repo repository.Repository, branch string) (string, error)
 
 type runtimeDependencies struct {
 	findRepository    repositoryFinder
@@ -27,6 +28,7 @@ type runtimeDependencies struct {
 	createWorktree    worktreeCreator
 	startSession      sessionStarter
 	attachSession     sessionAttacher
+	stopSession       sessionStopper
 }
 
 type commandEnvironment struct {
@@ -36,6 +38,7 @@ type commandEnvironment struct {
 	create     worktreeCreator
 	start      sessionStarter
 	attach     sessionAttacher
+	stop       sessionStopper
 }
 
 type commandSpec struct {
@@ -62,7 +65,7 @@ var commandSpecs = []commandSpec{
 	{name: "create", arguments: "<branch>", argCount: 1, run: createWorktree},
 	{name: "start", arguments: "<branch>", argCount: 1, run: startSession},
 	{name: "attach", arguments: "<branch>", argCount: 1, run: attachSession},
-	{name: "stop", arguments: "<branch>", argCount: 1, run: notImplemented("stop")},
+	{name: "stop", arguments: "<branch>", argCount: 1, run: stopSession},
 	{name: "list", argCount: 0, run: notImplemented("list")},
 }
 
@@ -74,6 +77,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		createWorktree:    worktreemanager.Create,
 		startSession:      session.Start,
 		attachSession:     session.Attach,
+		stopSession:       session.Stop,
 	})
 }
 
@@ -140,6 +144,7 @@ func run(
 		create:     deps.createWorktree,
 		start:      deps.startSession,
 		attach:     deps.attachSession,
+		stop:       deps.stopSession,
 	}
 	if err := spec.run(commandArgs, environment); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
@@ -151,6 +156,15 @@ func run(
 
 func attachSession(args []string, environment commandEnvironment) error {
 	return environment.attach(environment.repository, args[0])
+}
+
+func stopSession(args []string, environment commandEnvironment) error {
+	name, err := environment.stop(environment.repository, args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(environment.stdout, "Stopped tmux session %s\n", name)
+	return nil
 }
 
 func startSession(args []string, environment commandEnvironment) error {

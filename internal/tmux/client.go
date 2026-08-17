@@ -35,6 +35,10 @@ func (client Client) Attach(name string) error {
 	return client.attach(name)
 }
 
+func (client Client) Stop(name string) error {
+	return client.run("kill-session", "-t", "="+name)
+}
+
 func (client Client) StartDetached(name string, windows []Window) (bool, error) {
 	running, err := client.HasSession(name)
 	if err != nil {

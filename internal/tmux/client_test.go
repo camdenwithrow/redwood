@@ -103,6 +103,21 @@ func TestAttach(t *testing.T) {
 	}
 }
 
+func TestStop(t *testing.T) {
+	var got []string
+	client := Client{run: func(args ...string) error {
+		got = append([]string(nil), args...)
+		return nil
+	}}
+
+	if err := client.Stop("session"); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	if want := []string{"kill-session", "-t", "=session"}; !slices.Equal(got, want) {
+		t.Fatalf("Stop() args = %v, want %v", got, want)
+	}
+}
+
 func missingSessionError(t *testing.T) error {
 	t.Helper()
 	err := exec.Command("sh", "-c", "exit 1").Run()
