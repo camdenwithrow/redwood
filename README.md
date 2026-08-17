@@ -106,7 +106,7 @@ rw list                 Show worktrees, ports, and running state
 ### 7. End-to-end verification and documentation
 
 - [x] Add integration coverage around temporary Git repositories where practical.
-- [ ] Verify all commands can be invoked from the main checkout.
+- [x] Verify all commands can be invoked from the main checkout.
 - [ ] Verify two worktrees receive different ports and run concurrently.
 - [ ] Verify processes remain running after detaching from tmux.
 - [ ] Document installation, prerequisites, configuration, and the core workflow.
