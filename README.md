@@ -77,7 +77,7 @@ rw list                 Show worktrees, ports, and running state
 
 ### 4. `rw create`
 
-- [ ] Validate the requested branch name and reject duplicate worktrees.
+- [x] Validate the requested branch name and reject duplicate worktrees.
 - [ ] Expand `{repo}` and `{branch}` in `worktree_path` safely for the filesystem.
 - [ ] Create or check out the branch from `base_branch` using `git worktree add`.
 - [ ] Allocate and persist the worktree's slot after successful creation.
