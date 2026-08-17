@@ -35,7 +35,11 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 		sort.Strings(labels)
 		windows := make([]tmux.Window, 0, len(labels))
 		for _, label := range labels {
-			windows = append(windows, tmux.Window{Name: label, Command: configuration.Commands[label]})
+			windows = append(windows, tmux.Window{
+				Name:      label,
+				Command:   configuration.Commands[label],
+				Directory: worktree.Path,
+			})
 		}
 		if err := client.StartDetached(name, windows); err != nil {
 			return "", fmt.Errorf("start tmux session for branch %q: %w", branch, err)

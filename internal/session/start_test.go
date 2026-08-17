@@ -41,6 +41,11 @@ func TestStartCreatesDetachedSessionForBranch(t *testing.T) {
 	if len(client.windows) != 2 || client.windows[0].Name != "backend" || client.windows[1].Name != "frontend" {
 		t.Fatalf("start() windows = %v, want sorted command windows", client.windows)
 	}
+	for _, window := range client.windows {
+		if window.Directory != repo.MainCheckout {
+			t.Fatalf("start() window directory = %q, want %q", window.Directory, repo.MainCheckout)
+		}
+	}
 }
 
 func TestStartRejectsMissingWorktree(t *testing.T) {
