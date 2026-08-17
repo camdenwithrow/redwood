@@ -80,7 +80,7 @@ rw list                 Show worktrees, ports, and running state
 - [x] Validate the requested branch name and reject duplicate worktrees.
 - [x] Expand `{repo}` and `{branch}` in `worktree_path` safely for the filesystem.
 - [x] Create or check out the branch from `base_branch` using `git worktree add`.
-- [ ] Allocate and persist the worktree's slot after successful creation.
+- [x] Allocate and persist the worktree's slot after successful creation.
 - [ ] Print the created path, slot, and assigned service ports.
 - [ ] Roll back partial state when worktree creation or allocation fails.
 
