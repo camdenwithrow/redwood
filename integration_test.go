@@ -56,6 +56,26 @@ func TestEveryCommandRunsFromMainCheckout(t *testing.T) {
 	}
 }
 
+func TestTwoWorktreesUseDifferentPortsAndRunConcurrently(t *testing.T) {
+	project := newTestProject(t)
+
+	project.run(t, "create", "feature/a")
+	project.run(t, "create", "feature/b")
+	project.run(t, "start", "feature/a")
+	project.run(t, "start", "feature/b")
+	listOutput := project.run(t, "list")
+
+	if !strings.Contains(listOutput, "feature/a\t1\trunning\tapp=4100") {
+		t.Fatalf("rw list output = %q, want feature/a running on port 4100", listOutput)
+	}
+	if !strings.Contains(listOutput, "feature/b\t2\trunning\tapp=4200") {
+		t.Fatalf("rw list output = %q, want feature/b running on port 4200", listOutput)
+	}
+
+	project.run(t, "stop", "feature/a")
+	project.run(t, "stop", "feature/b")
+}
+
 func newTestProject(t *testing.T) testProject {
 	t.Helper()
 
