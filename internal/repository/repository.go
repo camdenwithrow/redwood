@@ -6,7 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+
+	gitexec "github.com/camdenwithrow/redwood/internal/git"
 )
 
 const (
@@ -14,10 +15,11 @@ const (
 	masterBranch = "master"
 )
 
-// Repository describes the main checkout and its shared Git directory.
+// Repository identifies a repository's primary checkout and shared Git data.
 type Repository struct {
-	Root   string
-	GitDir string
+	Name         string
+	MainCheckout string
+	GitDir       string
 }
 
 // Discover locates and validates the main checkout containing the current
@@ -34,12 +36,13 @@ func Discover() (Repository, error) {
 // DiscoverFrom locates a repository from start and verifies that start belongs
 // to its main checkout rather than a linked worktree.
 func DiscoverFrom(start string) (Repository, error) {
-	root, err := gitOutput(start, "rev-parse", "--show-toplevel")
+	runner := gitexec.NewRunner(start)
+	root, err := runner.Output("rev-parse", "--show-toplevel")
 	if err != nil {
 		return Repository{}, fmt.Errorf("locate repository root: %w", err)
 	}
 
-	gitDir, err := gitOutput(start, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	gitDir, err := runner.Output("rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return Repository{}, fmt.Errorf("locate shared Git directory: %w", err)
 	}
@@ -55,14 +58,18 @@ func DiscoverFrom(start string) (Repository, error) {
 		)
 	}
 
-	return Repository{Root: root, GitDir: gitDir}, nil
+	return Repository{
+		Name:         filepath.Base(root),
+		MainCheckout: root,
+		GitDir:       gitDir,
+	}, nil
 }
 
 // ResolveBaseBranch verifies a configured local base branch or auto-detects
 // main or master when configured is empty.
 func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 	if configured != "" {
-		exists, err := localBranchExists(repo.Root, configured)
+		exists, err := localBranchExists(repo.MainCheckout, configured)
 		if err != nil {
 			return "", err
 		}
@@ -73,11 +80,11 @@ func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 		return configured, nil
 	}
 
-	hasMain, err := localBranchExists(repo.Root, mainBranch)
+	hasMain, err := localBranchExists(repo.MainCheckout, mainBranch)
 	if err != nil {
 		return "", err
 	}
-	hasMaster, err := localBranchExists(repo.Root, masterBranch)
+	hasMaster, err := localBranchExists(repo.MainCheckout, masterBranch)
 	if err != nil {
 		return "", err
 	}
@@ -94,25 +101,9 @@ func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 	}
 }
 
-func gitOutput(directory string, args ...string) (string, error) {
-	commandArgs := append([]string{"-C", directory}, args...)
-	output, err := exec.Command("git", commandArgs...).CombinedOutput()
-	if err != nil {
-		detail := strings.TrimSpace(string(output))
-		if detail == "" {
-			detail = err.Error()
-		}
-
-		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), detail)
-	}
-
-	return strings.TrimSpace(string(output)), nil
-}
-
 func localBranchExists(repositoryRoot, branch string) (bool, error) {
 	ref := "refs/heads/" + branch
-	command := exec.Command("git", "-C", repositoryRoot, "show-ref", "--verify", "--quiet", ref)
-	err := command.Run()
+	err := gitexec.NewRunner(repositoryRoot).Run("show-ref", "--verify", "--quiet", ref)
 	if err == nil {
 		return true, nil
 	}

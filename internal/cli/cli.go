@@ -106,7 +106,7 @@ func run(
 		return 1
 	}
 
-	loadedConfig, err := deps.loadConfig(discoveredRepository.Root)
+	loadedConfig, err := deps.loadConfig(discoveredRepository.MainCheckout)
 	if err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
 		return 1
