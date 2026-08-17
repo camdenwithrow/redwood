@@ -1,0 +1,13 @@
+base_branch = "main"
+worktree_path = "../{repo}-{branch}"
+port_stride = 100
+
+[ports]
+frontend = 3000
+backend = 8080
+simulator = 8081
+
+[commands]
+frontend = "just dev-web --port $RW_PORT"
+backend = "just dev-server --port $RW_PORT"
+simulator = "just dev-mobile --port $RW_PORT"
