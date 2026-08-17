@@ -7,5 +7,6 @@ import (
 )
 
 func main() {
-	os.Exit(cli.Run(os.Args[1:], os.Stdout, os.Stderr))
+	exitCode := cli.Run(os.Args[1:], os.Stdout, os.Stderr)
+	os.Exit(exitCode)
 }
