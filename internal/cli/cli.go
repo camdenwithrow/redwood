@@ -3,9 +3,13 @@ package cli
 import (
 	"fmt"
 	"io"
+
+	"github.com/camdenwithrow/redwood/internal/repository"
 )
 
-type command func(args []string) error
+type command func(args []string, repo repository.Repository) error
+
+type repositoryFinder func() (repository.Repository, error)
 
 type commandSpec struct {
 	name      string
@@ -38,6 +42,10 @@ var commandSpecs = []commandSpec{
 // Run dispatches args to the requested Redwood command and returns a process
 // exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
+	return run(args, stdout, stderr, repository.Discover)
+}
+
+func run(args []string, stdout, stderr io.Writer, findRepository repositoryFinder) int {
 	if len(args) == 0 {
 		writeUsageError(stderr, "no command provided")
 		return 2
@@ -69,7 +77,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	if err := spec.run(commandArgs); err != nil {
+	discoveredRepository, err := findRepository()
+	if err != nil {
+		fmt.Fprintf(stderr, "rw: %v\n", err)
+		return 1
+	}
+
+	if err := spec.run(commandArgs, discoveredRepository); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
 		return 1
 	}
@@ -78,7 +92,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 }
 
 func notImplemented(name string) command {
-	return func(_ []string) error {
+	return func(_ []string, _ repository.Repository) error {
 		return fmt.Errorf("%s is not implemented yet", name)
 	}
 }

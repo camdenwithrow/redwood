@@ -2,8 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/camdenwithrow/redwood/internal/repository"
 )
 
 func TestRunHelp(t *testing.T) {
@@ -60,7 +63,7 @@ func TestRunDispatchesKnownCommand(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	exitCode := Run([]string{"attach", "feature/a"}, &stdout, &stderr)
+	exitCode := run([]string{"attach", "feature/a"}, &stdout, &stderr, successfulRepositoryFinder)
 
 	if exitCode != 1 {
 		t.Fatalf("Run() exit code = %d, want 1", exitCode)
@@ -68,4 +71,25 @@ func TestRunDispatchesKnownCommand(t *testing.T) {
 	if got := stderr.String(); got != "rw: attach is not implemented yet\n" {
 		t.Fatalf("Run() stderr = %q, want not-implemented error", got)
 	}
+}
+
+func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	finder := func() (repository.Repository, error) {
+		return repository.Repository{}, errors.New("run rw from the main checkout")
+	}
+
+	exitCode := run([]string{"list"}, &stdout, &stderr, finder)
+
+	if exitCode != 1 {
+		t.Fatalf("run() exit code = %d, want 1", exitCode)
+	}
+	if got := stderr.String(); got != "rw: run rw from the main checkout\n" {
+		t.Fatalf("run() stderr = %q, want repository error", got)
+	}
+}
+
+func successfulRepositoryFinder() (repository.Repository, error) {
+	return repository.Repository{Root: "/repo", GitDir: "/repo/.git"}, nil
 }
