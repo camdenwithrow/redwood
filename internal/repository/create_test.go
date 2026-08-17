@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +17,65 @@ func TestValidateNewWorktree(t *testing.T) {
 
 	if err := ValidateNewWorktree(repo, "feature/available"); err != nil {
 		t.Fatalf("ValidateNewWorktree() error = %v", err)
+	}
+}
+
+func TestCreateWorktreeCreatesBranchFromBase(t *testing.T) {
+	repositoryRoot := initializeCommittedRepository(t, "main")
+	repo, err := DiscoverFrom(repositoryRoot)
+	if err != nil {
+		t.Fatalf("DiscoverFrom() error = %v", err)
+	}
+	worktreePath := filepath.Join(t.TempDir(), "feature-new")
+
+	worktree, err := CreateWorktree(repo, "feature/new", worktreePath, "main")
+	if err != nil {
+		t.Fatalf("CreateWorktree() error = %v", err)
+	}
+	canonicalPath, err := filepath.EvalSymlinks(worktreePath)
+	if err != nil {
+		t.Fatalf("resolve worktree path: %v", err)
+	}
+	if worktree.Path != canonicalPath || worktree.Branch != "feature/new" || worktree.Commit == "" {
+		t.Fatalf("CreateWorktree() = %+v", worktree)
+	}
+	if got, want := gitOutputForTest(t, repositoryRoot, "rev-parse", "feature/new"), gitOutputForTest(t, repositoryRoot, "rev-parse", "main"); got != want {
+		t.Fatalf("created branch commit = %q, want base commit %q", got, want)
+	}
+}
+
+func TestCreateWorktreeChecksOutExistingBranch(t *testing.T) {
+	repositoryRoot := initializeCommittedRepository(t, "main")
+	runGit(t, repositoryRoot, "branch", "feature/existing")
+	repo, err := DiscoverFrom(repositoryRoot)
+	if err != nil {
+		t.Fatalf("DiscoverFrom() error = %v", err)
+	}
+	worktreePath := filepath.Join(t.TempDir(), "feature-existing")
+
+	worktree, err := CreateWorktree(repo, "feature/existing", worktreePath, "main")
+	if err != nil {
+		t.Fatalf("CreateWorktree() error = %v", err)
+	}
+	if worktree.Branch != "feature/existing" {
+		t.Fatalf("CreateWorktree() branch = %q, want feature/existing", worktree.Branch)
+	}
+}
+
+func TestCreateWorktreeRejectsExistingPath(t *testing.T) {
+	repositoryRoot := initializeCommittedRepository(t, "main")
+	repo, err := DiscoverFrom(repositoryRoot)
+	if err != nil {
+		t.Fatalf("DiscoverFrom() error = %v", err)
+	}
+	existingPath := t.TempDir()
+
+	_, err = CreateWorktree(repo, "feature/new", existingPath, "main")
+	if err == nil {
+		t.Fatal("CreateWorktree() error = nil, want existing path error")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("CreateWorktree() error = %q, want existing path context", err)
 	}
 }
 
@@ -105,4 +165,16 @@ func TestValidateNewWorktreeRejectsDuplicateWorktree(t *testing.T) {
 	if !strings.Contains(err.Error(), `branch "feature/existing" already has a worktree`) {
 		t.Fatalf("ValidateNewWorktree() error = %q, want duplicate branch context", err)
 	}
+}
+
+func gitOutputForTest(t *testing.T, directory string, args ...string) string {
+	t.Helper()
+
+	commandArgs := append([]string{"-C", directory}, args...)
+	command := exec.Command("git", commandArgs...)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, output)
+	}
+	return strings.TrimSpace(string(output))
 }
