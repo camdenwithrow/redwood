@@ -65,11 +65,26 @@ locked maintenance
 }
 
 func TestParseWorktreeListRejectsMalformedOutput(t *testing.T) {
-	_, err := parseWorktreeList("HEAD 0123456789abcdef")
-	if err == nil {
-		t.Fatal("parseWorktreeList() error = nil, want malformed output error")
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{name: "property before path", output: "HEAD 0123456789abcdef", want: "property appears before worktree path"},
+		{name: "missing commit", output: "worktree /projects/redwood\nbranch refs/heads/main", want: "has no HEAD commit"},
+		{name: "missing branch state", output: "worktree /projects/redwood\nHEAD 0123456789abcdef", want: "has neither a branch nor detached state"},
+		{name: "conflicting branch state", output: "worktree /projects/redwood\nHEAD 0123456789abcdef\nbranch refs/heads/main\ndetached", want: "cannot have both a branch and detached state"},
 	}
-	if !strings.Contains(err.Error(), "property appears before worktree path") {
-		t.Fatalf("parseWorktreeList() error = %q, want property ordering context", err)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := parseWorktreeList(test.output)
+			if err == nil {
+				t.Fatal("parseWorktreeList() error = nil, want malformed output error")
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("parseWorktreeList() error = %q, want it to contain %q", err, test.want)
+			}
+		})
 	}
 }

@@ -43,7 +43,11 @@ func parseWorktreeList(output string) ([]Worktree, error) {
 		switch {
 		case strings.HasPrefix(line, "worktree "):
 			if current != nil {
-				worktrees = append(worktrees, *current)
+				var err error
+				worktrees, err = appendWorktree(worktrees, current)
+				if err != nil {
+					return nil, err
+				}
 			}
 			path := strings.TrimPrefix(line, "worktree ")
 			if path == "" {
@@ -52,7 +56,11 @@ func parseWorktreeList(output string) ([]Worktree, error) {
 			current = &Worktree{Path: path}
 		case line == "":
 			if current != nil {
-				worktrees = append(worktrees, *current)
+				var err error
+				worktrees, err = appendWorktree(worktrees, current)
+				if err != nil {
+					return nil, err
+				}
 				current = nil
 			}
 		case current == nil:
@@ -67,8 +75,29 @@ func parseWorktreeList(output string) ([]Worktree, error) {
 	}
 
 	if current != nil {
-		worktrees = append(worktrees, *current)
+		var err error
+		worktrees, err = appendWorktree(worktrees, current)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return worktrees, nil
+}
+
+func appendWorktree(worktrees []Worktree, worktree *Worktree) ([]Worktree, error) {
+	if worktree.Path == "" {
+		return nil, fmt.Errorf("worktree path is empty")
+	}
+	if worktree.Commit == "" {
+		return nil, fmt.Errorf("worktree %q has no HEAD commit", worktree.Path)
+	}
+	if worktree.Branch == "" && !worktree.Detached {
+		return nil, fmt.Errorf("worktree %q has neither a branch nor detached state", worktree.Path)
+	}
+	if worktree.Branch != "" && worktree.Detached {
+		return nil, fmt.Errorf("worktree %q cannot have both a branch and detached state", worktree.Path)
+	}
+
+	return append(worktrees, *worktree), nil
 }
