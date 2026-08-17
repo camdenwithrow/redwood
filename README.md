@@ -176,7 +176,7 @@ or branch when stopping a session.
 - [x] Verify two worktrees receive different ports and run concurrently.
 - [x] Verify processes remain running after detaching from tmux.
 - [x] Document installation, prerequisites, configuration, and the core workflow.
-- [ ] Run formatting, tests, static analysis, and a clean build.
+- [x] Run formatting, tests, static analysis, and a clean build.
 
 ## MVP acceptance scenario
 
