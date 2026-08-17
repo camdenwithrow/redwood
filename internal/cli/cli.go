@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
@@ -212,39 +215,72 @@ func listWorktrees(_ []string, environment commandEnvironment) error {
 	if err != nil {
 		return err
 	}
+	return writeWorktreeList(environment.stdout, listed)
+}
 
-	for index, info := range listed {
-		if index > 0 {
-			fmt.Fprintln(environment.stdout)
+func writeWorktreeList(output io.Writer, listed []worktreemanager.Info) error {
+	sorted := append([]worktreemanager.Info(nil), listed...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		left := sorted[i]
+		right := sorted[j]
+		if left.Slot == nil || right.Slot == nil {
+			if left.Slot != nil {
+				return true
+			}
+			if right.Slot != nil {
+				return false
+			}
+			return left.Worktree.Path < right.Worktree.Path
 		}
-		branch := info.Worktree.Branch
-		if branch == "" {
-			branch = "(detached)"
+		return *left.Slot < *right.Slot
+	})
+
+	writer := csv.NewWriter(output)
+	writer.Comma = '\t'
+	if err := writer.Write([]string{"BRANCH", "SLOT", "RUNNING", "PORTS", "PATH"}); err != nil {
+		return fmt.Errorf("write worktree list: %w", err)
+	}
+	for _, info := range sorted {
+		if err := writer.Write(worktreeFields(info)); err != nil {
+			return fmt.Errorf("write worktree list: %w", err)
 		}
-		fmt.Fprintf(environment.stdout, "Branch: %s\n", branch)
-		fmt.Fprintf(environment.stdout, "Path: %s\n", info.Worktree.Path)
-		if info.Slot == nil {
-			fmt.Fprintln(environment.stdout, "Slot: -")
-		} else {
-			fmt.Fprintf(environment.stdout, "Slot: %d\n", *info.Slot)
-		}
-		fmt.Fprintln(environment.stdout, "Ports:")
-		labels := make([]string, 0, len(info.Ports))
-		for label := range info.Ports {
-			labels = append(labels, label)
-		}
-		sort.Strings(labels)
-		for _, label := range labels {
-			fmt.Fprintf(environment.stdout, "  %s: %d\n", label, info.Ports[label])
-		}
-		running := "no"
-		if info.Running {
-			running = "yes"
-		}
-		fmt.Fprintf(environment.stdout, "Running: %s\n", running)
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return fmt.Errorf("write worktree list: %w", err)
 	}
 
 	return nil
+}
+
+func worktreeFields(info worktreemanager.Info) []string {
+	branch := info.Worktree.Branch
+	if branch == "" {
+		branch = "(detached)"
+	}
+	slot := "-"
+	if info.Slot != nil {
+		slot = strconv.Itoa(*info.Slot)
+	}
+	running := "stopped"
+	if info.Running {
+		running = "running"
+	}
+	labels := make([]string, 0, len(info.Ports))
+	for label := range info.Ports {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	ports := make([]string, 0, len(labels))
+	for _, label := range labels {
+		ports = append(ports, label+"="+strconv.Itoa(info.Ports[label]))
+	}
+	portList := strings.Join(ports, ",")
+	if portList == "" {
+		portList = "-"
+	}
+
+	return []string{branch, slot, running, portList, info.Worktree.Path}
 }
 
 func findCommand(name string) (*commandSpec, bool) {

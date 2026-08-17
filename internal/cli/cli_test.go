@@ -165,16 +165,17 @@ func TestRunListPrintsWorktreeDetails(t *testing.T) {
 	deps.listWorktrees = func(repository.Repository, config.Config) ([]worktreemanager.Info, error) {
 		return []worktreemanager.Info{
 			{
-				Worktree: repository.Worktree{Branch: "main", Path: "/repo"},
-				Slot:     &mainSlot,
-				Ports:    map[string]int{"web": 3000, "api": 8080},
-			},
-			{
-				Worktree: repository.Worktree{Branch: "feature/a", Path: "/repo-feature-a"},
+				Worktree: repository.Worktree{Branch: "feature/a", Path: "/repo feature a"},
 				Slot:     &featureSlot,
 				Ports:    map[string]int{"web": 3200, "api": 8280},
 				Running:  true,
 			},
+			{
+				Worktree: repository.Worktree{Branch: "main", Path: "/repo"},
+				Slot:     &mainSlot,
+				Ports:    map[string]int{"web": 3000, "api": 8080},
+			},
+			{Worktree: repository.Worktree{Path: "/repo-detached", Detached: true}},
 		}, nil
 	}
 
@@ -183,8 +184,10 @@ func TestRunListPrintsWorktreeDetails(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
 	}
-	want := "Branch: main\nPath: /repo\nSlot: 0\nPorts:\n  api: 8080\n  web: 3000\nRunning: no\n\n" +
-		"Branch: feature/a\nPath: /repo-feature-a\nSlot: 2\nPorts:\n  api: 8280\n  web: 3200\nRunning: yes\n"
+	want := "BRANCH\tSLOT\tRUNNING\tPORTS\tPATH\n" +
+		"main\t0\tstopped\tapi=8080,web=3000\t/repo\n" +
+		"feature/a\t2\trunning\tapi=8280,web=3200\t/repo feature a\n" +
+		"(detached)\t-\tstopped\t-\t/repo-detached\n"
 	if stdout.String() != want {
 		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
 	}
