@@ -4,12 +4,12 @@ Redwood is a small Git worktree and tmux project manager written in Go. It is
 invoked as `rw` from the main repository checkout and coordinates worktrees,
 stable development ports, and detached tmux sessions.
 
-## MVP configuration
+## Configuration
 
 Redwood reads a committed `redwood.toml` from the repository root:
 
 ```toml
-base_branch = "main"
+base_branch = "main" (optional)
 worktree_path = "../{repo}-{branch}"
 port_stride = 100
 
@@ -17,17 +17,19 @@ port_stride = 100
 web = 3000
 api = 8080
 mobile = 8081
+...anything = 4321
 
 [commands]
-api = "just dev-server"
-web = "just dev-web"
+api = "just dev-server --port={{RW_PORT}"
+web = "just dev-web --port={{RW_PORT} "
 mobile = "just dev-mobile"
+...anything = "just anything"
 ```
 
 Each worktree receives a stable numeric slot. Its service ports are calculated
 as `base port + slot * port_stride`, allowing multiple worktrees to run at the
 same time without port conflicts. Redwood supplies only these port environment
-variables; Doppler remains responsible for secrets.
+variables
 
 ## Commands
 
@@ -39,7 +41,7 @@ rw stop feature/foo     Stop its tmux session
 rw list                 Show worktrees, ports, and running state
 ```
 
-## MVP TODO
+## TODO
 
 ### 1. CLI foundation
 
@@ -119,6 +121,6 @@ must continue running in detached tmux sessions until explicitly stopped.
 
 ## Deferred scope
 
-The MVP will not manage databases, provide a proxy or TUI, integrate with
+The MVP will not manage databases, env vars, provide a proxy or TUI, integrate with
 Docker, or delete branches. These features should not be introduced until the
 core worktree, port allocation, and tmux workflow is complete and reliable.
