@@ -43,11 +43,11 @@ func parseWorktreeList(output string) ([]Worktree, error) {
 		switch {
 		case strings.HasPrefix(line, "worktree "):
 			if current != nil {
-				var err error
-				worktrees, err = appendWorktree(worktrees, current)
+				updatedWorktrees, err := appendWorktree(worktrees, current)
 				if err != nil {
 					return nil, err
 				}
+				worktrees = updatedWorktrees
 			}
 			path := strings.TrimPrefix(line, "worktree ")
 			if path == "" {
@@ -56,11 +56,11 @@ func parseWorktreeList(output string) ([]Worktree, error) {
 			current = &Worktree{Path: path}
 		case line == "":
 			if current != nil {
-				var err error
-				worktrees, err = appendWorktree(worktrees, current)
+				updatedWorktrees, err := appendWorktree(worktrees, current)
 				if err != nil {
 					return nil, err
 				}
+				worktrees = updatedWorktrees
 				current = nil
 			}
 		case current == nil:
@@ -75,11 +75,11 @@ func parseWorktreeList(output string) ([]Worktree, error) {
 	}
 
 	if current != nil {
-		var err error
-		worktrees, err = appendWorktree(worktrees, current)
+		updatedWorktrees, err := appendWorktree(worktrees, current)
 		if err != nil {
 			return nil, err
 		}
+		worktrees = updatedWorktrees
 	}
 
 	return worktrees, nil
