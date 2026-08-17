@@ -103,6 +103,20 @@ func TestRunCreatePrintsWorktreeDetails(t *testing.T) {
 	}
 }
 
+func TestRunStartPrintsSessionName(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	exitCode := run([]string{"start", "feature/a"}, &stdout, &stderr, successfulDependencies())
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	if got, want := stdout.String(), "Started tmux session rw-redwood-main-123456789abc\n"; got != want {
+		t.Fatalf("run() stdout = %q, want %q", got, want)
+	}
+}
+
 func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -180,6 +194,9 @@ func successfulDependencies() runtimeDependencies {
 		},
 		createWorktree: func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
 			return worktreemanager.Created{}, nil
+		},
+		startSession: func(repository.Repository, string) (string, error) {
+			return "rw-redwood-main-123456789abc", nil
 		},
 	}
 }
