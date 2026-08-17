@@ -19,13 +19,26 @@ type Window struct {
 	Port      int
 }
 
+type CommandError struct {
+	Args   []string
+	Output string
+	Err    error
+}
+
 func NewClient() Client {
 	return Client{run: run}
 }
 
-func (client Client) StartDetached(name string, windows []Window) error {
+func (client Client) StartDetached(name string, windows []Window) (bool, error) {
+	running, err := client.HasSession(name)
+	if err != nil {
+		return false, err
+	}
+	if running {
+		return true, nil
+	}
 	if len(windows) == 0 {
-		return fmt.Errorf("tmux session requires at least one window")
+		return false, fmt.Errorf("tmux session requires at least one window")
 	}
 	first := windows[0]
 	if err := client.run(
@@ -35,7 +48,7 @@ func (client Client) StartDetached(name string, windows []Window) error {
 		"-e", "RW_PORT="+strconv.Itoa(first.Port),
 		first.Command,
 	); err != nil {
-		return err
+		return false, err
 	}
 	for _, window := range windows[1:] {
 		if err := client.run(
@@ -45,10 +58,22 @@ func (client Client) StartDetached(name string, windows []Window) error {
 			"-e", "RW_PORT="+strconv.Itoa(window.Port),
 			window.Command,
 		); err != nil {
-			return errors.Join(err, client.run("kill-session", "-t", name))
+			return false, errors.Join(err, client.run("kill-session", "-t", name))
 		}
 	}
-	return nil
+	return false, nil
+}
+
+func (client Client) HasSession(name string) (bool, error) {
+	err := client.run("has-session", "-t", "="+name)
+	if err == nil {
+		return true, nil
+	}
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
 }
 
 func run(args ...string) error {
@@ -60,5 +85,13 @@ func run(args ...string) error {
 	if detail == "" {
 		detail = err.Error()
 	}
-	return fmt.Errorf("tmux %s: %s", strings.Join(args, " "), detail)
+	return &CommandError{Args: append([]string(nil), args...), Output: detail, Err: err}
+}
+
+func (commandError *CommandError) Error() string {
+	return fmt.Sprintf("tmux %s: %s", strings.Join(commandError.Args, " "), commandError.Output)
+}
+
+func (commandError *CommandError) Unwrap() error {
+	return commandError.Err
 }

@@ -91,7 +91,7 @@ rw list                 Show worktrees, ports, and running state
 - [x] Create one tmux window per configured command.
 - [x] Run every command from the selected worktree directory.
 - [x] Supply only the calculated port environment variables to each command.
-- [ ] Make `rw start` report an already-running session without duplicating it.
+- [x] Make `rw start` report an already-running session without duplicating it.
 - [ ] Implement `rw attach` for the selected worktree's session.
 - [ ] Implement `rw stop` by terminating the selected worktree's session.
 - [ ] Report clear errors when tmux is unavailable or a session is not running.

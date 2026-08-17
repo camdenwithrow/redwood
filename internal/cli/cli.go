@@ -17,7 +17,7 @@ type repositoryFinder func() (repository.Repository, error)
 type configLoader func(repositoryRoot string) (config.Config, error)
 type baseBranchResolver func(repo repository.Repository, configured string) (string, error)
 type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
-type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (string, error)
+type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
 
 type runtimeDependencies struct {
 	findRepository    repositoryFinder
@@ -145,11 +145,15 @@ func run(
 }
 
 func startSession(args []string, environment commandEnvironment) error {
-	name, err := environment.start(environment.repository, environment.config, args[0])
+	started, err := environment.start(environment.repository, environment.config, args[0])
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(environment.stdout, "Started tmux session %s\n", name)
+	if started.AlreadyRunning {
+		fmt.Fprintf(environment.stdout, "Tmux session already running: %s\n", started.Name)
+		return nil
+	}
+	fmt.Fprintf(environment.stdout, "Started tmux session %s\n", started.Name)
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
+	"github.com/camdenwithrow/redwood/internal/session"
 	worktreemanager "github.com/camdenwithrow/redwood/internal/worktree"
 )
 
@@ -117,6 +118,24 @@ func TestRunStartPrintsSessionName(t *testing.T) {
 	}
 }
 
+func TestRunStartReportsExistingSession(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.startSession = func(repository.Repository, config.Config, string) (session.Started, error) {
+		return session.Started{Name: "existing-session", AlreadyRunning: true}, nil
+	}
+
+	exitCode := run([]string{"start", "feature/a"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	if got, want := stdout.String(), "Tmux session already running: existing-session\n"; got != want {
+		t.Fatalf("run() stdout = %q, want %q", got, want)
+	}
+}
+
 func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -195,8 +214,8 @@ func successfulDependencies() runtimeDependencies {
 		createWorktree: func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
 			return worktreemanager.Created{}, nil
 		},
-		startSession: func(repository.Repository, config.Config, string) (string, error) {
-			return "rw-redwood-main-123456789abc", nil
+		startSession: func(repository.Repository, config.Config, string) (session.Started, error) {
+			return session.Started{Name: "rw-redwood-main-123456789abc"}, nil
 		},
 	}
 }
