@@ -108,7 +108,7 @@ rw list                 Show worktrees, ports, and running state
 - [x] Add integration coverage around temporary Git repositories where practical.
 - [x] Verify all commands can be invoked from the main checkout.
 - [x] Verify two worktrees receive different ports and run concurrently.
-- [ ] Verify processes remain running after detaching from tmux.
+- [x] Verify processes remain running after detaching from tmux.
 - [ ] Document installation, prerequisites, configuration, and the core workflow.
 - [ ] Run formatting, tests, static analysis, and a clean build.
 

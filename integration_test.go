@@ -76,6 +76,28 @@ func TestTwoWorktreesUseDifferentPortsAndRunConcurrently(t *testing.T) {
 	project.run(t, "stop", "feature/b")
 }
 
+func TestProcessesRemainRunningAfterDetaching(t *testing.T) {
+	project, tmuxPath, socket := newTestProject(t).withRealTmux(t)
+	t.Cleanup(func() {
+		command := exec.Command(tmuxPath, "-S", socket, "kill-server")
+		_ = command.Run()
+	})
+
+	project.run(t, "create", "feature/detached")
+	project.run(t, "start", "feature/detached")
+	listOutput := project.run(t, "list")
+	panes := runCommand(t, "", tmuxPath, "-S", socket, "list-panes", "-a", "-F", "#{pane_dead}|#{pane_start_command}")
+
+	if !strings.Contains(listOutput, "feature/detached\t1\trunning\tapp=4100") {
+		t.Fatalf("rw list output = %q, want detached session running", listOutput)
+	}
+	if !strings.HasPrefix(panes, "0|") || !strings.Contains(panes, "sleep 60") {
+		t.Fatalf("tmux panes = %q, want live sleep process", panes)
+	}
+
+	project.run(t, "stop", "feature/detached")
+}
+
 func newTestProject(t *testing.T) testProject {
 	t.Helper()
 
@@ -160,6 +182,38 @@ func (project testProject) run(t *testing.T, args ...string) string {
 	return strings.TrimSpace(string(output))
 }
 
+func (project testProject) withRealTmux(t *testing.T) (testProject, string, string) {
+	t.Helper()
+
+	tmuxPath, err := exec.LookPath("tmux")
+	if err != nil {
+		t.Skip("tmux is required for detached process integration coverage")
+	}
+	socketFile, err := os.CreateTemp("/tmp", "redwood-tmux-")
+	if err != nil {
+		t.Fatalf("create tmux socket path: %v", err)
+	}
+	socket := socketFile.Name()
+	if err := socketFile.Close(); err != nil {
+		t.Fatalf("close tmux socket placeholder: %v", err)
+	}
+	if err := os.Remove(socket); err != nil {
+		t.Fatalf("prepare tmux socket path: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(socket) })
+	wrapperDirectory := t.TempDir()
+	wrapper := filepath.Join(wrapperDirectory, "tmux")
+	writeExecutable(
+		t,
+		wrapper,
+		"#!/bin/sh\nexec "+shellQuote(tmuxPath)+" -S "+shellQuote(socket)+" \"$@\"\n",
+	)
+	project.environment = []string{
+		"PATH=" + wrapperDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+	}
+	return project, tmuxPath, socket
+}
+
 func gitOutput(t *testing.T, directory string, args ...string) string {
 	t.Helper()
 	return runCommand(t, directory, "git", args...)
@@ -190,4 +244,8 @@ func writeExecutable(t *testing.T, path, contents string) {
 	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
