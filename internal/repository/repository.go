@@ -6,7 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+
+	gitexec "github.com/camdenwithrow/redwood/internal/git"
 )
 
 const (
@@ -34,12 +35,13 @@ func Discover() (Repository, error) {
 // DiscoverFrom locates a repository from start and verifies that start belongs
 // to its main checkout rather than a linked worktree.
 func DiscoverFrom(start string) (Repository, error) {
-	root, err := gitOutput(start, "rev-parse", "--show-toplevel")
+	runner := gitexec.NewRunner(start)
+	root, err := runner.Output("rev-parse", "--show-toplevel")
 	if err != nil {
 		return Repository{}, fmt.Errorf("locate repository root: %w", err)
 	}
 
-	gitDir, err := gitOutput(start, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	gitDir, err := runner.Output("rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return Repository{}, fmt.Errorf("locate shared Git directory: %w", err)
 	}
@@ -94,25 +96,9 @@ func ResolveBaseBranch(repo Repository, configured string) (string, error) {
 	}
 }
 
-func gitOutput(directory string, args ...string) (string, error) {
-	commandArgs := append([]string{"-C", directory}, args...)
-	output, err := exec.Command("git", commandArgs...).CombinedOutput()
-	if err != nil {
-		detail := strings.TrimSpace(string(output))
-		if detail == "" {
-			detail = err.Error()
-		}
-
-		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), detail)
-	}
-
-	return strings.TrimSpace(string(output)), nil
-}
-
 func localBranchExists(repositoryRoot, branch string) (bool, error) {
 	ref := "refs/heads/" + branch
-	command := exec.Command("git", "-C", repositoryRoot, "show-ref", "--verify", "--quiet", ref)
-	err := command.Run()
+	err := gitexec.NewRunner(repositoryRoot).Run("show-ref", "--verify", "--quiet", ref)
 	if err == nil {
 		return true, nil
 	}

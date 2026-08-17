@@ -59,7 +59,7 @@ rw list                 Show worktrees, ports, and running state
 
 ### 2. Repository and worktree discovery
 
-- [ ] Wrap Git command execution so failures include useful context.
+- [x] Wrap Git command execution so failures include useful context.
 - [ ] Discover existing worktrees with `git worktree list --porcelain`.
 - [ ] Resolve the repository name, main checkout, and shared Git directory.
 - [ ] Represent each worktree with its path, branch, and current commit.
