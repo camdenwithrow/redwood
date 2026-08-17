@@ -68,7 +68,7 @@ rw list                 Show worktrees, ports, and running state
 ### 3. Stable slot and port allocation
 
 - [x] Define a small allocation file stored under the shared Git directory.
-- [ ] Assign each new worktree the lowest available stable numeric slot.
+- [x] Assign each new worktree the lowest available stable numeric slot.
 - [ ] Preserve a worktree's slot across repeated Redwood invocations.
 - [ ] Reconcile stored allocations with worktrees discovered from Git.
 - [ ] Calculate every configured service port as `base + slot * port_stride`.
