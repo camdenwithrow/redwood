@@ -1,11 +1,17 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+)
+
+const (
+	mainBranch   = "main"
+	masterBranch = "master"
 )
 
 // Repository describes the main checkout and its shared Git directory.
@@ -52,6 +58,42 @@ func DiscoverFrom(start string) (Repository, error) {
 	return Repository{Root: root, GitDir: gitDir}, nil
 }
 
+// ResolveBaseBranch verifies a configured local base branch or auto-detects
+// main or master when configured is empty.
+func ResolveBaseBranch(repo Repository, configured string) (string, error) {
+	if configured != "" {
+		exists, err := localBranchExists(repo.Root, configured)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return "", fmt.Errorf("configured base branch %q does not exist locally", configured)
+		}
+
+		return configured, nil
+	}
+
+	hasMain, err := localBranchExists(repo.Root, mainBranch)
+	if err != nil {
+		return "", err
+	}
+	hasMaster, err := localBranchExists(repo.Root, masterBranch)
+	if err != nil {
+		return "", err
+	}
+
+	switch {
+	case hasMain && hasMaster:
+		return "", fmt.Errorf("base_branch is omitted but both %q and %q exist; set base_branch explicitly", mainBranch, masterBranch)
+	case hasMain:
+		return mainBranch, nil
+	case hasMaster:
+		return masterBranch, nil
+	default:
+		return "", fmt.Errorf("base_branch is omitted but neither %q nor %q exists; set base_branch explicitly", mainBranch, masterBranch)
+	}
+}
+
 func gitOutput(directory string, args ...string) (string, error) {
 	commandArgs := append([]string{"-C", directory}, args...)
 	output, err := exec.Command("git", commandArgs...).CombinedOutput()
@@ -65,4 +107,20 @@ func gitOutput(directory string, args ...string) (string, error) {
 	}
 
 	return strings.TrimSpace(string(output)), nil
+}
+
+func localBranchExists(repositoryRoot, branch string) (bool, error) {
+	ref := "refs/heads/" + branch
+	command := exec.Command("git", "-C", repositoryRoot, "show-ref", "--verify", "--quiet", ref)
+	err := command.Run()
+	if err == nil {
+		return true, nil
+	}
+
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("check local branch %q: %w", branch, err)
 }

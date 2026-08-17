@@ -23,7 +23,7 @@ type Config struct {
 // Load reads and validates redwood.toml from repositoryRoot.
 func Load(repositoryRoot string) (Config, error) {
 	configPath := filepath.Join(repositoryRoot, FileName)
-	loaded := Config{BaseBranch: "main"}
+	loaded := Config{}
 
 	metadata, err := toml.DecodeFile(configPath, &loaded)
 	if err != nil {
@@ -39,6 +39,9 @@ func Load(repositoryRoot string) (Config, error) {
 
 		return Config{}, fmt.Errorf("load %s: unknown field(s): %s", configPath, strings.Join(keys, ", "))
 	}
+	if metadata.IsDefined("base_branch") && strings.TrimSpace(loaded.BaseBranch) == "" {
+		return Config{}, fmt.Errorf("load %s: base_branch must not be empty", configPath)
+	}
 
 	if err := loaded.validate(); err != nil {
 		return Config{}, fmt.Errorf("load %s: %w", configPath, err)
@@ -48,9 +51,6 @@ func Load(repositoryRoot string) (Config, error) {
 }
 
 func (config Config) validate() error {
-	if strings.TrimSpace(config.BaseBranch) == "" {
-		return fmt.Errorf("base_branch must not be empty")
-	}
 	if strings.TrimSpace(config.WorktreePath) == "" {
 		return fmt.Errorf("worktree_path is required")
 	}

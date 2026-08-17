@@ -9,7 +9,7 @@ stable development ports, and detached tmux sessions.
 Redwood reads a committed `redwood.toml` from the repository root:
 
 ```toml
-# Optional; defaults to "main".
+# Optional; auto-detects a local "main" or "master" when omitted.
 base_branch = "main"
 worktree_path = "../{repo}-{branch}"
 port_stride = 100

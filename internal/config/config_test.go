@@ -27,8 +27,8 @@ func TestLoadValidConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if loaded.BaseBranch != "main" {
-		t.Fatalf("Load() BaseBranch = %q, want default %q", loaded.BaseBranch, "main")
+	if loaded.BaseBranch != "" {
+		t.Fatalf("Load() BaseBranch = %q, want empty value for auto-detection", loaded.BaseBranch)
 	}
 	if loaded.WorktreePath != "../{repo}-{branch}" {
 		t.Fatalf("Load() WorktreePath = %q", loaded.WorktreePath)

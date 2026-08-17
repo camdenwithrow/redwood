@@ -12,6 +12,13 @@ type command func(args []string, environment commandEnvironment) error
 
 type repositoryFinder func() (repository.Repository, error)
 type configLoader func(repositoryRoot string) (config.Config, error)
+type baseBranchResolver func(repo repository.Repository, configured string) (string, error)
+
+type runtimeDependencies struct {
+	findRepository    repositoryFinder
+	loadConfig        configLoader
+	resolveBaseBranch baseBranchResolver
+}
 
 type commandEnvironment struct {
 	repository repository.Repository
@@ -49,15 +56,18 @@ var commandSpecs = []commandSpec{
 // Run dispatches args to the requested Redwood command and returns a process
 // exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
-	return run(args, stdout, stderr, repository.Discover, config.Load)
+	return run(args, stdout, stderr, runtimeDependencies{
+		findRepository:    repository.Discover,
+		loadConfig:        config.Load,
+		resolveBaseBranch: repository.ResolveBaseBranch,
+	})
 }
 
 func run(
 	args []string,
 	stdout io.Writer,
 	stderr io.Writer,
-	findRepository repositoryFinder,
-	loadConfig configLoader,
+	deps runtimeDependencies,
 ) int {
 	if len(args) == 0 {
 		writeUsageError(stderr, "no command provided")
@@ -90,17 +100,24 @@ func run(
 		return 2
 	}
 
-	discoveredRepository, err := findRepository()
+	discoveredRepository, err := deps.findRepository()
 	if err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
 		return 1
 	}
 
-	loadedConfig, err := loadConfig(discoveredRepository.Root)
+	loadedConfig, err := deps.loadConfig(discoveredRepository.Root)
 	if err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
 		return 1
 	}
+
+	baseBranch, err := deps.resolveBaseBranch(discoveredRepository, loadedConfig.BaseBranch)
+	if err != nil {
+		fmt.Fprintf(stderr, "rw: %v\n", err)
+		return 1
+	}
+	loadedConfig.BaseBranch = baseBranch
 
 	environment := commandEnvironment{
 		repository: discoveredRepository,

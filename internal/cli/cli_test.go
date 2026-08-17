@@ -68,8 +68,7 @@ func TestRunDispatchesKnownCommand(t *testing.T) {
 		[]string{"attach", "feature/a"},
 		&stdout,
 		&stderr,
-		successfulRepositoryFinder,
-		successfulConfigLoader,
+		successfulDependencies(),
 	)
 
 	if exitCode != 1 {
@@ -87,7 +86,9 @@ func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
 		return repository.Repository{}, errors.New("run rw from the main checkout")
 	}
 
-	exitCode := run([]string{"list"}, &stdout, &stderr, finder, successfulConfigLoader)
+	deps := successfulDependencies()
+	deps.findRepository = finder
+	exitCode := run([]string{"list"}, &stdout, &stderr, deps)
 
 	if exitCode != 1 {
 		t.Fatalf("run() exit code = %d, want 1", exitCode)
@@ -104,7 +105,9 @@ func TestRunReportsConfigError(t *testing.T) {
 		return config.Config{}, errors.New("load redwood.toml: port_stride must be greater than zero")
 	}
 
-	exitCode := run([]string{"list"}, &stdout, &stderr, successfulRepositoryFinder, loader)
+	deps := successfulDependencies()
+	deps.loadConfig = loader
+	exitCode := run([]string{"list"}, &stdout, &stderr, deps)
 
 	if exitCode != 1 {
 		t.Fatalf("run() exit code = %d, want 1", exitCode)
@@ -114,10 +117,38 @@ func TestRunReportsConfigError(t *testing.T) {
 	}
 }
 
+func TestRunReportsBaseBranchResolutionError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.resolveBaseBranch = func(repository.Repository, string) (string, error) {
+		return "", errors.New(`both "main" and "master" exist; set base_branch explicitly`)
+	}
+
+	exitCode := run([]string{"list"}, &stdout, &stderr, deps)
+
+	if exitCode != 1 {
+		t.Fatalf("run() exit code = %d, want 1", exitCode)
+	}
+	if got := stderr.String(); got != "rw: both \"main\" and \"master\" exist; set base_branch explicitly\n" {
+		t.Fatalf("run() stderr = %q, want base branch error", got)
+	}
+}
+
 func successfulRepositoryFinder() (repository.Repository, error) {
 	return repository.Repository{Root: "/repo", GitDir: "/repo/.git"}, nil
 }
 
 func successfulConfigLoader(string) (config.Config, error) {
 	return config.Config{}, nil
+}
+
+func successfulDependencies() runtimeDependencies {
+	return runtimeDependencies{
+		findRepository: successfulRepositoryFinder,
+		loadConfig:     successfulConfigLoader,
+		resolveBaseBranch: func(repository.Repository, string) (string, error) {
+			return "main", nil
+		},
+	}
 }
