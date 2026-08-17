@@ -63,7 +63,7 @@ rw list                 Show worktrees, ports, and running state
 - [x] Discover existing worktrees with `git worktree list --porcelain`.
 - [x] Resolve the repository name, main checkout, and shared Git directory.
 - [x] Represent each worktree with its path, branch, and current commit.
-- [ ] Add parser tests using representative Git worktree output.
+- [x] Add parser tests using representative Git worktree output.
 
 ### 3. Stable slot and port allocation
 

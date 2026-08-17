@@ -38,7 +38,7 @@ func TestListWorktrees(t *testing.T) {
 	}
 }
 
-func TestParseWorktreeList(t *testing.T) {
+func TestParseWorktreeListRepresentativeOutput(t *testing.T) {
 	const porcelain = `worktree /projects/redwood
 HEAD 0123456789abcdef
 branch refs/heads/main
@@ -47,20 +47,28 @@ worktree /projects/redwood-feature
 HEAD fedcba9876543210
 detached
 locked maintenance
+
+worktree /projects/redwood-prunable
+HEAD aabbccddeeff0011
+branch refs/heads/feature/prunable
+prunable gitdir file points to non-existent location
 `
 
 	worktrees, err := parseWorktreeList(porcelain)
 	if err != nil {
 		t.Fatalf("parseWorktreeList() error = %v", err)
 	}
-	if len(worktrees) != 2 {
-		t.Fatalf("parseWorktreeList() returned %d worktrees, want 2", len(worktrees))
+	if len(worktrees) != 3 {
+		t.Fatalf("parseWorktreeList() returned %d worktrees, want 3", len(worktrees))
 	}
 	if got := worktrees[0]; got.Path != "/projects/redwood" || got.Commit != "0123456789abcdef" || got.Branch != "main" || got.Detached {
 		t.Fatalf("parseWorktreeList() main worktree = %+v", got)
 	}
 	if got := worktrees[1]; got.Path != "/projects/redwood-feature" || got.Commit != "fedcba9876543210" || got.Branch != "" || !got.Detached {
 		t.Fatalf("parseWorktreeList() detached worktree = %+v", got)
+	}
+	if got := worktrees[2]; got.Path != "/projects/redwood-prunable" || got.Commit != "aabbccddeeff0011" || got.Branch != "feature/prunable" || got.Detached {
+		t.Fatalf("parseWorktreeList() prunable worktree = %+v", got)
 	}
 }
 
