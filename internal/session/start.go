@@ -69,3 +69,16 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 
 	return Started{}, fmt.Errorf("branch %q has no worktree", branch)
 }
+
+func worktreeForBranch(repo repository.Repository, branch string) (repository.Worktree, error) {
+	worktrees, err := repository.ListWorktrees(repo)
+	if err != nil {
+		return repository.Worktree{}, err
+	}
+	for _, worktree := range worktrees {
+		if worktree.Branch == branch {
+			return worktree, nil
+		}
+	}
+	return repository.Worktree{}, fmt.Errorf("branch %q has no worktree", branch)
+}

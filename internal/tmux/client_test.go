@@ -88,6 +88,21 @@ func TestStartDetachedReturnsExistingSession(t *testing.T) {
 	}
 }
 
+func TestAttach(t *testing.T) {
+	var got string
+	client := Client{attach: func(name string) error {
+		got = name
+		return nil
+	}}
+
+	if err := client.Attach("session"); err != nil {
+		t.Fatalf("Attach() error = %v", err)
+	}
+	if got != "session" {
+		t.Fatalf("Attach() name = %q, want session", got)
+	}
+}
+
 func missingSessionError(t *testing.T) error {
 	t.Helper()
 	err := exec.Command("sh", "-c", "exit 1").Run()

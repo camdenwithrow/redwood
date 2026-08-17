@@ -62,22 +62,28 @@ func TestRunUsageErrors(t *testing.T) {
 	}
 }
 
-func TestRunDispatchesKnownCommand(t *testing.T) {
+func TestRunAttachDispatchesSelectedBranch(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
+	var attachedBranch string
+	deps := successfulDependencies()
+	deps.attachSession = func(_ repository.Repository, branch string) error {
+		attachedBranch = branch
+		return nil
+	}
 
 	exitCode := run(
 		[]string{"attach", "feature/a"},
 		&stdout,
 		&stderr,
-		successfulDependencies(),
+		deps,
 	)
 
-	if exitCode != 1 {
-		t.Fatalf("Run() exit code = %d, want 1", exitCode)
+	if exitCode != 0 {
+		t.Fatalf("Run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
 	}
-	if got := stderr.String(); got != "rw: attach is not implemented yet\n" {
-		t.Fatalf("Run() stderr = %q, want not-implemented error", got)
+	if attachedBranch != "feature/a" {
+		t.Fatalf("run() attached branch = %q, want feature/a", attachedBranch)
 	}
 }
 
@@ -217,5 +223,6 @@ func successfulDependencies() runtimeDependencies {
 		startSession: func(repository.Repository, config.Config, string) (session.Started, error) {
 			return session.Started{Name: "rw-redwood-main-123456789abc"}, nil
 		},
+		attachSession: func(repository.Repository, string) error { return nil },
 	}
 }

@@ -3,13 +3,15 @@ package tmux
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 )
 
 type Client struct {
-	run func(args ...string) error
+	run    func(args ...string) error
+	attach func(name string) error
 }
 
 type Window struct {
@@ -26,7 +28,11 @@ type CommandError struct {
 }
 
 func NewClient() Client {
-	return Client{run: run}
+	return Client{run: run, attach: attach}
+}
+
+func (client Client) Attach(name string) error {
+	return client.attach(name)
 }
 
 func (client Client) StartDetached(name string, windows []Window) (bool, error) {
@@ -86,6 +92,17 @@ func run(args ...string) error {
 		detail = err.Error()
 	}
 	return &CommandError{Args: append([]string(nil), args...), Output: detail, Err: err}
+}
+
+func attach(name string) error {
+	command := exec.Command("tmux", "attach-session", "-t", "="+name)
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		return &CommandError{Args: []string{"attach-session", "-t", "=" + name}, Err: err, Output: err.Error()}
+	}
+	return nil
 }
 
 func (commandError *CommandError) Error() string {

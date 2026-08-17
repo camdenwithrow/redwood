@@ -18,6 +18,7 @@ type configLoader func(repositoryRoot string) (config.Config, error)
 type baseBranchResolver func(repo repository.Repository, configured string) (string, error)
 type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
 type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
+type sessionAttacher func(repo repository.Repository, branch string) error
 
 type runtimeDependencies struct {
 	findRepository    repositoryFinder
@@ -25,6 +26,7 @@ type runtimeDependencies struct {
 	resolveBaseBranch baseBranchResolver
 	createWorktree    worktreeCreator
 	startSession      sessionStarter
+	attachSession     sessionAttacher
 }
 
 type commandEnvironment struct {
@@ -33,6 +35,7 @@ type commandEnvironment struct {
 	stdout     io.Writer
 	create     worktreeCreator
 	start      sessionStarter
+	attach     sessionAttacher
 }
 
 type commandSpec struct {
@@ -58,7 +61,7 @@ Run "rw help" to show this message.
 var commandSpecs = []commandSpec{
 	{name: "create", arguments: "<branch>", argCount: 1, run: createWorktree},
 	{name: "start", arguments: "<branch>", argCount: 1, run: startSession},
-	{name: "attach", arguments: "<branch>", argCount: 1, run: notImplemented("attach")},
+	{name: "attach", arguments: "<branch>", argCount: 1, run: attachSession},
 	{name: "stop", arguments: "<branch>", argCount: 1, run: notImplemented("stop")},
 	{name: "list", argCount: 0, run: notImplemented("list")},
 }
@@ -70,6 +73,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		resolveBaseBranch: repository.ResolveBaseBranch,
 		createWorktree:    worktreemanager.Create,
 		startSession:      session.Start,
+		attachSession:     session.Attach,
 	})
 }
 
@@ -135,6 +139,7 @@ func run(
 		stdout:     stdout,
 		create:     deps.createWorktree,
 		start:      deps.startSession,
+		attach:     deps.attachSession,
 	}
 	if err := spec.run(commandArgs, environment); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
@@ -142,6 +147,10 @@ func run(
 	}
 
 	return 0
+}
+
+func attachSession(args []string, environment commandEnvironment) error {
+	return environment.attach(environment.repository, args[0])
 }
 
 func startSession(args []string, environment commandEnvironment) error {
