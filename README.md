@@ -86,7 +86,7 @@ rw list                 Show worktrees, ports, and running state
 
 ### 5. tmux session lifecycle
 
-- [ ] Generate a deterministic, collision-safe tmux session name per worktree.
+- [x] Generate a deterministic, collision-safe tmux session name per worktree.
 - [ ] Implement `rw start` with one detached session per worktree.
 - [ ] Create one tmux window per configured command.
 - [ ] Run every command from the selected worktree directory.
