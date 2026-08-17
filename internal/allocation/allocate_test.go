@@ -1,6 +1,51 @@
 package allocation
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/camdenwithrow/redwood/internal/repository"
+)
+
+func TestStoreAssignPersistsStableSlots(t *testing.T) {
+	gitDirectory := filepath.Join(t.TempDir(), ".git")
+	repo := repository.Repository{GitDir: gitDirectory}
+
+	firstInvocation := NewStore(repo)
+	firstSlot, err := firstInvocation.Assign("feature/a")
+	if err != nil {
+		t.Fatalf("first Assign() error = %v", err)
+	}
+	if firstSlot != 0 {
+		t.Fatalf("first Assign() slot = %d, want 0", firstSlot)
+	}
+
+	secondInvocation := NewStore(repo)
+	repeatedSlot, err := secondInvocation.Assign("feature/a")
+	if err != nil {
+		t.Fatalf("repeated Assign() error = %v", err)
+	}
+	if repeatedSlot != firstSlot {
+		t.Fatalf("repeated Assign() slot = %d, want stable slot %d", repeatedSlot, firstSlot)
+	}
+
+	secondSlot, err := secondInvocation.Assign("feature/b")
+	if err != nil {
+		t.Fatalf("second branch Assign() error = %v", err)
+	}
+	if secondSlot != 1 {
+		t.Fatalf("second branch Assign() slot = %d, want 1", secondSlot)
+	}
+
+	thirdInvocation := NewStore(repo)
+	state, err := thirdInvocation.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if state.Slots["feature/a"] != 0 || state.Slots["feature/b"] != 1 {
+		t.Fatalf("Load() slots = %v, want persisted allocations", state.Slots)
+	}
+}
 
 func TestStateAssignsLowestAvailableSlot(t *testing.T) {
 	tests := []struct {
