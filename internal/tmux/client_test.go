@@ -90,10 +90,13 @@ func TestStartDetachedReturnsExistingSession(t *testing.T) {
 
 func TestAttach(t *testing.T) {
 	var got string
-	client := Client{attach: func(name string) error {
-		got = name
-		return nil
-	}}
+	client := Client{
+		run: func(...string) error { return nil },
+		attach: func(name string) error {
+			got = name
+			return nil
+		},
+	}
 
 	if err := client.Attach("session"); err != nil {
 		t.Fatalf("Attach() error = %v", err)
@@ -104,17 +107,48 @@ func TestAttach(t *testing.T) {
 }
 
 func TestStop(t *testing.T) {
-	var got []string
+	var got [][]string
 	client := Client{run: func(args ...string) error {
-		got = append([]string(nil), args...)
+		got = append(got, append([]string(nil), args...))
 		return nil
 	}}
 
 	if err := client.Stop("session"); err != nil {
 		t.Fatalf("Stop() error = %v", err)
 	}
-	if want := []string{"kill-session", "-t", "=session"}; !slices.Equal(got, want) {
+	want := [][]string{{"has-session", "-t", "=session"}, {"kill-session", "-t", "=session"}}
+	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("Stop() args = %v, want %v", got, want)
+	}
+}
+
+func TestAttachAndStopRejectMissingSession(t *testing.T) {
+	client := Client{
+		run:    func(...string) error { return missingSessionError(t) },
+		attach: func(string) error { return errors.New("attach should not run") },
+	}
+
+	for operation, run := range map[string]func() error{
+		"attach": func() error { return client.Attach("missing") },
+		"stop":   func() error { return client.Stop("missing") },
+	} {
+		t.Run(operation, func(t *testing.T) {
+			var sessionError SessionNotFoundError
+			if err := run(); !errors.As(err, &sessionError) {
+				t.Fatalf("error = %v, want SessionNotFoundError", err)
+			}
+		})
+	}
+}
+
+func TestUnavailableError(t *testing.T) {
+	err := newCommandError(
+		[]string{"has-session"},
+		"",
+		&exec.Error{Name: "tmux", Err: exec.ErrNotFound},
+	)
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("newCommandError() = %v, want ErrUnavailable", err)
 	}
 }
 

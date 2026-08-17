@@ -94,7 +94,7 @@ rw list                 Show worktrees, ports, and running state
 - [x] Make `rw start` report an already-running session without duplicating it.
 - [x] Implement `rw attach` for the selected worktree's session.
 - [x] Implement `rw stop` by terminating the selected worktree's session.
-- [ ] Report clear errors when tmux is unavailable or a session is not running.
+- [x] Report clear errors when tmux is unavailable or a session is not running.
 
 ### 6. `rw list`
 
