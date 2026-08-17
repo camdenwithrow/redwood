@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
@@ -20,6 +23,7 @@ type worktreeCreator func(repo repository.Repository, configuration config.Confi
 type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
 type sessionAttacher func(repo repository.Repository, branch string) error
 type sessionStopper func(repo repository.Repository, branch string) (string, error)
+type worktreeLister func(repo repository.Repository, configuration config.Config) ([]worktreemanager.Info, error)
 
 type runtimeDependencies struct {
 	findRepository    repositoryFinder
@@ -29,6 +33,7 @@ type runtimeDependencies struct {
 	startSession      sessionStarter
 	attachSession     sessionAttacher
 	stopSession       sessionStopper
+	listWorktrees     worktreeLister
 }
 
 type commandEnvironment struct {
@@ -39,6 +44,7 @@ type commandEnvironment struct {
 	start      sessionStarter
 	attach     sessionAttacher
 	stop       sessionStopper
+	list       worktreeLister
 }
 
 type commandSpec struct {
@@ -66,7 +72,7 @@ var commandSpecs = []commandSpec{
 	{name: "start", arguments: "<branch>", argCount: 1, run: startSession},
 	{name: "attach", arguments: "<branch>", argCount: 1, run: attachSession},
 	{name: "stop", arguments: "<branch>", argCount: 1, run: stopSession},
-	{name: "list", argCount: 0, run: notImplemented("list")},
+	{name: "list", argCount: 0, run: listWorktrees},
 }
 
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -78,6 +84,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		startSession:      session.Start,
 		attachSession:     session.Attach,
 		stopSession:       session.Stop,
+		listWorktrees:     worktreemanager.List,
 	})
 }
 
@@ -145,6 +152,7 @@ func run(
 		start:      deps.startSession,
 		attach:     deps.attachSession,
 		stop:       deps.stopSession,
+		list:       deps.listWorktrees,
 	}
 	if err := spec.run(commandArgs, environment); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
@@ -202,10 +210,77 @@ func createWorktree(args []string, environment commandEnvironment) error {
 	return nil
 }
 
-func notImplemented(name string) command {
-	return func(_ []string, _ commandEnvironment) error {
-		return fmt.Errorf("%s is not implemented yet", name)
+func listWorktrees(_ []string, environment commandEnvironment) error {
+	listed, err := environment.list(environment.repository, environment.config)
+	if err != nil {
+		return err
 	}
+	return writeWorktreeList(environment.stdout, listed)
+}
+
+func writeWorktreeList(output io.Writer, listed []worktreemanager.Info) error {
+	sorted := append([]worktreemanager.Info(nil), listed...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		left := sorted[i]
+		right := sorted[j]
+		if left.Slot == nil || right.Slot == nil {
+			if left.Slot != nil {
+				return true
+			}
+			if right.Slot != nil {
+				return false
+			}
+			return left.Worktree.Path < right.Worktree.Path
+		}
+		return *left.Slot < *right.Slot
+	})
+
+	writer := csv.NewWriter(output)
+	writer.Comma = '\t'
+	if err := writer.Write([]string{"BRANCH", "SLOT", "RUNNING", "PORTS", "PATH"}); err != nil {
+		return fmt.Errorf("write worktree list: %w", err)
+	}
+	for _, info := range sorted {
+		if err := writer.Write(worktreeFields(info)); err != nil {
+			return fmt.Errorf("write worktree list: %w", err)
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return fmt.Errorf("write worktree list: %w", err)
+	}
+
+	return nil
+}
+
+func worktreeFields(info worktreemanager.Info) []string {
+	branch := info.Worktree.Branch
+	if branch == "" {
+		branch = "(detached)"
+	}
+	slot := "-"
+	if info.Slot != nil {
+		slot = strconv.Itoa(*info.Slot)
+	}
+	running := "stopped"
+	if info.Running {
+		running = "running"
+	}
+	labels := make([]string, 0, len(info.Ports))
+	for label := range info.Ports {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	ports := make([]string, 0, len(labels))
+	for _, label := range labels {
+		ports = append(ports, label+"="+strconv.Itoa(info.Ports[label]))
+	}
+	portList := strings.Join(ports, ",")
+	if portList == "" {
+		portList = "-"
+	}
+
+	return []string{branch, slot, running, portList, info.Worktree.Path}
 }
 
 func findCommand(name string) (*commandSpec, bool) {

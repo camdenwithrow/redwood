@@ -156,6 +156,43 @@ func TestRunStopPrintsSessionName(t *testing.T) {
 	}
 }
 
+func TestRunListPrintsWorktreeDetails(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	mainSlot := 0
+	featureSlot := 2
+	deps := successfulDependencies()
+	deps.listWorktrees = func(repository.Repository, config.Config) ([]worktreemanager.Info, error) {
+		return []worktreemanager.Info{
+			{
+				Worktree: repository.Worktree{Branch: "feature/a", Path: "/repo feature a"},
+				Slot:     &featureSlot,
+				Ports:    map[string]int{"web": 3200, "api": 8280},
+				Running:  true,
+			},
+			{
+				Worktree: repository.Worktree{Branch: "main", Path: "/repo"},
+				Slot:     &mainSlot,
+				Ports:    map[string]int{"web": 3000, "api": 8080},
+			},
+			{Worktree: repository.Worktree{Path: "/repo-detached", Detached: true}},
+		}, nil
+	}
+
+	exitCode := run([]string{"list"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	want := "BRANCH\tSLOT\tRUNNING\tPORTS\tPATH\n" +
+		"main\t0\tstopped\tapi=8080,web=3000\t/repo\n" +
+		"feature/a\t2\trunning\tapi=8280,web=3200\t/repo feature a\n" +
+		"(detached)\t-\tstopped\t-\t/repo-detached\n"
+	if stdout.String() != want {
+		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
 func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -240,6 +277,9 @@ func successfulDependencies() runtimeDependencies {
 		attachSession: func(repository.Repository, string) error { return nil },
 		stopSession: func(repository.Repository, string) (string, error) {
 			return "rw-redwood-main-123456789abc", nil
+		},
+		listWorktrees: func(repository.Repository, config.Config) ([]worktreemanager.Info, error) {
+			return nil, nil
 		},
 	}
 }
