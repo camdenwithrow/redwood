@@ -1,0 +1,13 @@
+base_branch = "main"
+worktree_path = "../{repo}-{branch}"
+port_stride = 100
+
+[ports]
+web = 3000
+api = 8080
+mobile = 8081
+
+[commands]
+api = "just dev-server"
+web = "just dev-web"
+mobile = "just dev-mobile"

@@ -9,27 +9,27 @@ stable development ports, and detached tmux sessions.
 Redwood reads a committed `redwood.toml` from the repository root:
 
 ```toml
-base_branch = "main" (optional)
+# Optional; defaults to "main".
+base_branch = "main"
 worktree_path = "../{repo}-{branch}"
 port_stride = 100
 
+# Port and command names are user-defined service names.
 [ports]
 web = 3000
 api = 8080
 mobile = 8081
-...anything = 4321
 
 [commands]
-api = "just dev-server --port={{RW_PORT}"
-web = "just dev-web --port={{RW_PORT} "
+api = "just dev-server"
+web = "just dev-web"
 mobile = "just dev-mobile"
-...anything = "just anything"
 ```
 
 Each worktree receives a stable numeric slot. Its service ports are calculated
 as `base port + slot * port_stride`, allowing multiple worktrees to run at the
 same time without port conflicts. Redwood supplies only these port environment
-variables
+variables; Doppler remains responsible for secrets.
 
 ## Commands
 
@@ -48,8 +48,8 @@ rw list                 Show worktrees, ports, and running state
 - [x] Create the `rw` executable and command dispatcher in Go.
 - [x] Add consistent usage text, validation, and actionable error messages.
 - [x] Locate and validate the main repository checkout for every command.
-- [ ] Load the committed `redwood.toml` and validate its required fields.
-- [ ] Add focused tests for command parsing and invalid configuration.
+- [x] Load the committed `redwood.toml` and validate its required fields.
+- [x] Add focused tests for command parsing and invalid configuration.
 
 ### 2. Repository and worktree discovery
 

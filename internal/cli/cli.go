@@ -4,12 +4,19 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
 )
 
-type command func(args []string, repo repository.Repository) error
+type command func(args []string, environment commandEnvironment) error
 
 type repositoryFinder func() (repository.Repository, error)
+type configLoader func(repositoryRoot string) (config.Config, error)
+
+type commandEnvironment struct {
+	repository repository.Repository
+	config     config.Config
+}
 
 type commandSpec struct {
 	name      string
@@ -42,10 +49,16 @@ var commandSpecs = []commandSpec{
 // Run dispatches args to the requested Redwood command and returns a process
 // exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
-	return run(args, stdout, stderr, repository.Discover)
+	return run(args, stdout, stderr, repository.Discover, config.Load)
 }
 
-func run(args []string, stdout, stderr io.Writer, findRepository repositoryFinder) int {
+func run(
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+	findRepository repositoryFinder,
+	loadConfig configLoader,
+) int {
 	if len(args) == 0 {
 		writeUsageError(stderr, "no command provided")
 		return 2
@@ -83,7 +96,17 @@ func run(args []string, stdout, stderr io.Writer, findRepository repositoryFinde
 		return 1
 	}
 
-	if err := spec.run(commandArgs, discoveredRepository); err != nil {
+	loadedConfig, err := loadConfig(discoveredRepository.Root)
+	if err != nil {
+		fmt.Fprintf(stderr, "rw: %v\n", err)
+		return 1
+	}
+
+	environment := commandEnvironment{
+		repository: discoveredRepository,
+		config:     loadedConfig,
+	}
+	if err := spec.run(commandArgs, environment); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
 		return 1
 	}
@@ -92,7 +115,7 @@ func run(args []string, stdout, stderr io.Writer, findRepository repositoryFinde
 }
 
 func notImplemented(name string) command {
-	return func(_ []string, _ repository.Repository) error {
+	return func(_ []string, _ commandEnvironment) error {
 		return fmt.Errorf("%s is not implemented yet", name)
 	}
 }

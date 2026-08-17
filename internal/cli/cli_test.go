@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
 )
 
@@ -63,7 +64,13 @@ func TestRunDispatchesKnownCommand(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	exitCode := run([]string{"attach", "feature/a"}, &stdout, &stderr, successfulRepositoryFinder)
+	exitCode := run(
+		[]string{"attach", "feature/a"},
+		&stdout,
+		&stderr,
+		successfulRepositoryFinder,
+		successfulConfigLoader,
+	)
 
 	if exitCode != 1 {
 		t.Fatalf("Run() exit code = %d, want 1", exitCode)
@@ -80,7 +87,7 @@ func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
 		return repository.Repository{}, errors.New("run rw from the main checkout")
 	}
 
-	exitCode := run([]string{"list"}, &stdout, &stderr, finder)
+	exitCode := run([]string{"list"}, &stdout, &stderr, finder, successfulConfigLoader)
 
 	if exitCode != 1 {
 		t.Fatalf("run() exit code = %d, want 1", exitCode)
@@ -90,6 +97,27 @@ func TestRunReportsRepositoryDiscoveryError(t *testing.T) {
 	}
 }
 
+func TestRunReportsConfigError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	loader := func(string) (config.Config, error) {
+		return config.Config{}, errors.New("load redwood.toml: port_stride must be greater than zero")
+	}
+
+	exitCode := run([]string{"list"}, &stdout, &stderr, successfulRepositoryFinder, loader)
+
+	if exitCode != 1 {
+		t.Fatalf("run() exit code = %d, want 1", exitCode)
+	}
+	if got := stderr.String(); got != "rw: load redwood.toml: port_stride must be greater than zero\n" {
+		t.Fatalf("run() stderr = %q, want configuration error", got)
+	}
+}
+
 func successfulRepositoryFinder() (repository.Repository, error) {
 	return repository.Repository{Root: "/repo", GitDir: "/repo/.git"}, nil
+}
+
+func successfulConfigLoader(string) (config.Config, error) {
+	return config.Config{}, nil
 }
