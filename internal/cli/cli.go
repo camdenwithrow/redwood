@@ -17,7 +17,7 @@ type repositoryFinder func() (repository.Repository, error)
 type configLoader func(repositoryRoot string) (config.Config, error)
 type baseBranchResolver func(repo repository.Repository, configured string) (string, error)
 type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
-type sessionStarter func(repo repository.Repository, branch string) (string, error)
+type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (string, error)
 
 type runtimeDependencies struct {
 	findRepository    repositoryFinder
@@ -145,7 +145,7 @@ func run(
 }
 
 func startSession(args []string, environment commandEnvironment) error {
-	name, err := environment.start(environment.repository, args[0])
+	name, err := environment.start(environment.repository, environment.config, args[0])
 	if err != nil {
 		return err
 	}

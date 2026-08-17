@@ -88,7 +88,7 @@ rw list                 Show worktrees, ports, and running state
 
 - [x] Generate a deterministic, collision-safe tmux session name per worktree.
 - [x] Implement `rw start` with one detached session per worktree.
-- [ ] Create one tmux window per configured command.
+- [x] Create one tmux window per configured command.
 - [ ] Run every command from the selected worktree directory.
 - [ ] Supply only the calculated port environment variables to each command.
 - [ ] Make `rw start` report an already-running session without duplicating it.

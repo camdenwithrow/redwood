@@ -7,35 +7,46 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
+	"github.com/camdenwithrow/redwood/internal/tmux"
 )
 
 type fakeStarter struct {
-	name string
+	name    string
+	windows []tmux.Window
 }
 
-func (starter *fakeStarter) StartDetached(name string) error {
+func (starter *fakeStarter) StartDetached(name string, windows []tmux.Window) error {
 	starter.name = name
+	starter.windows = windows
 	return nil
 }
 
 func TestStartCreatesDetachedSessionForBranch(t *testing.T) {
 	repo := initializeRepository(t)
 	client := &fakeStarter{}
+	configuration := config.Config{Commands: map[string]string{
+		"frontend": "just dev-web",
+		"backend":  "just dev-server",
+	}}
 
-	name, err := start(repo, "main", client)
+	name, err := start(repo, configuration, "main", client)
 	if err != nil {
 		t.Fatalf("start() error = %v", err)
 	}
 	if name == "" || client.name != name {
 		t.Fatalf("start() name = %q, client name = %q", name, client.name)
 	}
+	if len(client.windows) != 2 || client.windows[0].Name != "backend" || client.windows[1].Name != "frontend" {
+		t.Fatalf("start() windows = %v, want sorted command windows", client.windows)
+	}
 }
 
 func TestStartRejectsMissingWorktree(t *testing.T) {
 	repo := initializeRepository(t)
 
-	_, err := start(repo, "feature/missing", &fakeStarter{})
+	_, err := start(repo, config.Config{}, "feature/missing", &fakeStarter{})
 	if err == nil {
 		t.Fatal("start() error = nil, want missing worktree error")
 	}

@@ -195,7 +195,7 @@ func successfulDependencies() runtimeDependencies {
 		createWorktree: func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
 			return worktreemanager.Created{}, nil
 		},
-		startSession: func(repository.Repository, string) (string, error) {
+		startSession: func(repository.Repository, config.Config, string) (string, error) {
 			return "rw-redwood-main-123456789abc", nil
 		},
 	}
