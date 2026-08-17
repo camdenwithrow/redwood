@@ -4,6 +4,34 @@ Redwood is a small Git worktree and tmux project manager written in Go. It is
 invoked as `rw` from the main repository checkout and coordinates worktrees,
 stable development ports, and detached tmux sessions.
 
+## Prerequisites
+
+- Git with worktree support.
+- tmux available on `PATH`.
+- Go 1.26.5 or newer to install from source.
+- Any tools referenced by the project's configured commands, such as `just` or
+  Doppler.
+
+Redwood does not load or store secrets. Put secret management in the configured
+command, such as `doppler run -- just dev-server`, when the project needs it.
+
+## Installation
+
+Install the latest version with Go:
+
+```sh
+go install github.com/camdenwithrow/redwood/cmd/rw@latest
+```
+
+Ensure Go's binary directory is on `PATH`, then verify the installation:
+
+```sh
+rw help
+```
+
+When developing Redwood itself, install the current checkout with
+`go install ./cmd/rw` from the repository root.
+
 ## Configuration
 
 Redwood reads a committed `redwood.toml` from the repository root:
@@ -37,6 +65,19 @@ remainders when divided by `port_stride`, which prevents one command's port in
 one slot from colliding with another command in a different slot. Redwood only
 supplies `RW_PORT`; Doppler remains responsible for secrets.
 
+The configuration fields are:
+
+- `base_branch`: the branch used when creating a new branch. It may be omitted
+  when exactly one local `main` or `master` branch exists.
+- `worktree_path`: the path template, resolved from the main checkout when
+  relative. `{repo}` and `{branch}` expand to filesystem-safe values.
+- `port_stride`: the amount added to every base port for each worktree slot.
+- `[ports]`: user-defined command labels and their base ports.
+- `[commands]`: matching labels and the commands Redwood runs in tmux windows.
+
+Slot allocations are kept in `.git/redwood/allocations.toml`, inside the shared
+Git directory rather than the committed repository.
+
 ## Commands
 
 ```text
@@ -46,6 +87,31 @@ rw attach feature/foo   Attach to its tmux session
 rw stop feature/foo     Stop its tmux session
 rw list                 Show worktrees, ports, and running state
 ```
+
+## Core workflow
+
+Run every Redwood command from the main checkout, even when operating on a
+linked worktree:
+
+```sh
+cd /path/to/main-checkout
+rw create feature/foo
+rw start feature/foo
+rw list
+rw attach feature/foo
+```
+
+Detach from the tmux session with tmux's configured detach binding, `Ctrl-b d`
+by default. The commands continue running after detaching. Stop the whole
+worktree session explicitly when it is no longer needed:
+
+```sh
+rw stop feature/foo
+```
+
+`rw list` prints one tab-separated row per worktree with its branch, slot,
+running state, calculated ports, and path. Redwood does not delete the worktree
+or branch when stopping a session.
 
 ## TODO
 
@@ -105,12 +171,12 @@ rw list                 Show worktrees, ports, and running state
 
 ### 7. End-to-end verification and documentation
 
-- [ ] Add integration coverage around temporary Git repositories where practical.
-- [ ] Verify all commands can be invoked from the main checkout.
-- [ ] Verify two worktrees receive different ports and run concurrently.
-- [ ] Verify processes remain running after detaching from tmux.
-- [ ] Document installation, prerequisites, configuration, and the core workflow.
-- [ ] Run formatting, tests, static analysis, and a clean build.
+- [x] Add integration coverage around temporary Git repositories where practical.
+- [x] Verify all commands can be invoked from the main checkout.
+- [x] Verify two worktrees receive different ports and run concurrently.
+- [x] Verify processes remain running after detaching from tmux.
+- [x] Document installation, prerequisites, configuration, and the core workflow.
+- [x] Run formatting, tests, static analysis, and a clean build.
 
 ## MVP acceptance scenario
 
