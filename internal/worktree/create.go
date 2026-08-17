@@ -11,6 +11,7 @@ import (
 type Created struct {
 	Worktree repository.Worktree
 	Slot     int
+	Ports    map[string]int
 }
 
 func Create(repo repository.Repository, configuration config.Config, branch string) (Created, error) {
@@ -36,6 +37,10 @@ func Create(repo repository.Repository, configuration config.Config, branch stri
 	if !exists {
 		return Created{}, fmt.Errorf("allocation state has no slot for branch %q", branch)
 	}
+	ports, err := allocation.CalculatePorts(configuration, slot)
+	if err != nil {
+		return Created{}, fmt.Errorf("calculate worktree ports: %w", err)
+	}
 
-	return Created{Worktree: createdWorktree, Slot: slot}, nil
+	return Created{Worktree: createdWorktree, Slot: slot, Ports: ports}, nil
 }

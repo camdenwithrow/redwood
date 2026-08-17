@@ -8,6 +8,7 @@ import (
 
 	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
+	worktreemanager "github.com/camdenwithrow/redwood/internal/worktree"
 )
 
 func TestRunHelp(t *testing.T) {
@@ -76,6 +77,29 @@ func TestRunDispatchesKnownCommand(t *testing.T) {
 	}
 	if got := stderr.String(); got != "rw: attach is not implemented yet\n" {
 		t.Fatalf("Run() stderr = %q, want not-implemented error", got)
+	}
+}
+
+func TestRunCreatePrintsWorktreeDetails(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.createWorktree = func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
+		return worktreemanager.Created{
+			Worktree: repository.Worktree{Path: "/repo-feature-a", Branch: "feature/a"},
+			Slot:     2,
+			Ports:    map[string]int{"frontend": 3200, "backend": 8280},
+		}, nil
+	}
+
+	exitCode := run([]string{"create", "feature/a"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	want := "Created worktree feature/a\nPath: /repo-feature-a\nSlot: 2\nPorts:\n  backend: 8280\n  frontend: 3200\n"
+	if stdout.String() != want {
+		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
 	}
 }
 
@@ -153,6 +177,9 @@ func successfulDependencies() runtimeDependencies {
 		loadConfig:     successfulConfigLoader,
 		resolveBaseBranch: func(repository.Repository, string) (string, error) {
 			return "main", nil
+		},
+		createWorktree: func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
+			return worktreemanager.Created{}, nil
 		},
 	}
 }

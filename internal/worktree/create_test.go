@@ -21,6 +21,8 @@ func TestCreatePersistsSlotAfterWorktreeCreation(t *testing.T) {
 	configuration := config.Config{
 		BaseBranch:   "main",
 		WorktreePath: filepath.Join(t.TempDir(), "{repo}-{branch}"),
+		PortStride:   100,
+		Ports:        map[string]int{"frontend": 3000, "backend": 8080},
 	}
 
 	created, err := Create(repo, configuration, "feature/a")
@@ -29,6 +31,9 @@ func TestCreatePersistsSlotAfterWorktreeCreation(t *testing.T) {
 	}
 	if created.Worktree.Branch != "feature/a" || created.Slot != 1 {
 		t.Fatalf("Create() = %+v, want feature/a at slot 1", created)
+	}
+	if created.Ports["frontend"] != 3100 || created.Ports["backend"] != 8180 {
+		t.Fatalf("Create() ports = %v, want frontend=3100 and backend=8180", created.Ports)
 	}
 	if _, err := os.Stat(created.Worktree.Path); err != nil {
 		t.Fatalf("created worktree path: %v", err)
@@ -53,6 +58,8 @@ func TestCreateDoesNotAllocateWhenGitCreationFails(t *testing.T) {
 	configuration := config.Config{
 		BaseBranch:   "main",
 		WorktreePath: existingPath,
+		PortStride:   100,
+		Ports:        map[string]int{"frontend": 3000},
 	}
 
 	_, err = Create(repo, configuration, "feature/a")
