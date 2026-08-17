@@ -67,7 +67,9 @@ func (config Config) validate() error {
 		return fmt.Errorf("commands must contain at least one entry")
 	}
 
-	for name, port := range config.Ports {
+	portNames := sortedKeys(config.Ports)
+	for _, name := range portNames {
+		port := config.Ports[name]
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("ports contains an empty name")
 		}
@@ -76,14 +78,46 @@ func (config Config) validate() error {
 		}
 	}
 
-	for name, command := range config.Commands {
+	commandNames := sortedKeys(config.Commands)
+	for _, name := range commandNames {
+		command := config.Commands[name]
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("commands contains an empty name")
 		}
 		if strings.TrimSpace(command) == "" {
 			return fmt.Errorf("commands.%s must not be empty", name)
 		}
+		if _, ok := config.Ports[name]; !ok {
+			return fmt.Errorf("commands.%s requires a matching ports.%s entry", name, name)
+		}
+	}
+
+	for _, name := range portNames {
+		if _, ok := config.Commands[name]; !ok {
+			return fmt.Errorf("ports.%s requires a matching commands.%s entry", name, name)
+		}
+	}
+
+	for i, firstName := range portNames {
+		for _, secondName := range portNames[i+1:] {
+			if config.Ports[firstName]%config.PortStride == config.Ports[secondName]%config.PortStride {
+				return fmt.Errorf(
+					"ports.%s and ports.%s can collide across worktree slots; choose base ports with different remainders modulo port_stride",
+					firstName,
+					secondName,
+				)
+			}
+		}
 	}
 
 	return nil
+}
+
+func sortedKeys[Value any](values map[string]Value) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

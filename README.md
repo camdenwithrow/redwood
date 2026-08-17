@@ -14,22 +14,28 @@ base_branch = "main"
 worktree_path = "../{repo}-{branch}"
 port_stride = 100
 
-# Port and command names are user-defined service names.
+# Labels are user-defined and must match between the two tables.
 [ports]
-web = 3000
-api = 8080
-mobile = 8081
+frontend = 3000
+backend = 8080
+simulator = 8081
 
 [commands]
-api = "just dev-server"
-web = "just dev-web"
-mobile = "just dev-mobile"
+frontend = "just dev-web --port $RW_PORT"
+backend = "just dev-server --port $RW_PORT"
+simulator = "just dev-mobile --port $RW_PORT"
 ```
 
-Each worktree receives a stable numeric slot. Its service ports are calculated
-as `base port + slot * port_stride`, allowing multiple worktrees to run at the
-same time without port conflicts. Redwood supplies only these port environment
-variables; Doppler remains responsible for secrets.
+The labels are not built into Redwood; users may define any commands their
+project needs. Each label creates one tmux window and must have one matching
+base port. Redwood sets that command's `RW_PORT` environment variable to
+`base port + slot * port_stride` before starting it.
+
+Each worktree receives a stable numeric slot, allowing the same command set to
+run in several worktrees without port conflicts. Base ports must have different
+remainders when divided by `port_stride`, which prevents one command's port in
+one slot from colliding with another command in a different slot. Redwood only
+supplies `RW_PORT`; Doppler remains responsible for secrets.
 
 ## Commands
 
@@ -66,7 +72,7 @@ rw list                 Show worktrees, ports, and running state
 - [ ] Preserve a worktree's slot across repeated Redwood invocations.
 - [ ] Reconcile stored allocations with worktrees discovered from Git.
 - [ ] Calculate every configured service port as `base + slot * port_stride`.
-- [ ] Define and document the port environment variable names passed to commands.
+- [x] Define and document the port environment variable names passed to commands.
 - [ ] Test stable allocation, multiple worktrees, and port calculations.
 
 ### 4. `rw create`

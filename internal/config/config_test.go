@@ -60,6 +60,9 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		{name: "invalid port", content: strings.Replace(validConfig, "web = 3000", "web = 70000", 1), want: "ports.web must be between 1 and 65535"},
 		{name: "missing commands", content: strings.Replace(validConfig, "web = \"just dev-web\"\napi = \"just dev-server\"", "", 1), want: "commands must contain at least one entry"},
 		{name: "empty command", content: strings.Replace(validConfig, "web = \"just dev-web\"", "web = \" \"", 1), want: "commands.web must not be empty"},
+		{name: "command without port", content: strings.Replace(validConfig, "api = 8080\n", "", 1), want: "commands.api requires a matching ports.api entry"},
+		{name: "port without command", content: strings.Replace(validConfig, "api = \"just dev-server\"\n", "", 1), want: "ports.api requires a matching commands.api entry"},
+		{name: "ports can collide between slots", content: strings.Replace(validConfig, "api = 8080", "api = 3100", 1), want: "ports.api and ports.web can collide across worktree slots"},
 	}
 
 	for _, test := range tests {
