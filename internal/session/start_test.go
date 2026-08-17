@@ -29,7 +29,10 @@ func TestStartCreatesDetachedSessionForBranch(t *testing.T) {
 	configuration := config.Config{Commands: map[string]string{
 		"frontend": "just dev-web",
 		"backend":  "just dev-server",
-	}}
+	}, Ports: map[string]int{
+		"frontend": 3000,
+		"backend":  8080,
+	}, PortStride: 100}
 
 	name, err := start(repo, configuration, "main", client)
 	if err != nil {
@@ -45,6 +48,9 @@ func TestStartCreatesDetachedSessionForBranch(t *testing.T) {
 		if window.Directory != repo.MainCheckout {
 			t.Fatalf("start() window directory = %q, want %q", window.Directory, repo.MainCheckout)
 		}
+	}
+	if client.windows[0].Port != 8080 || client.windows[1].Port != 3000 {
+		t.Fatalf("start() window ports = %v, want calculated slot-zero ports", client.windows)
 	}
 }
 

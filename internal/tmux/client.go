@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +16,7 @@ type Window struct {
 	Name      string
 	Command   string
 	Directory string
+	Port      int
 }
 
 func NewClient() Client {
@@ -26,11 +28,23 @@ func (client Client) StartDetached(name string, windows []Window) error {
 		return fmt.Errorf("tmux session requires at least one window")
 	}
 	first := windows[0]
-	if err := client.run("new-session", "-d", "-s", name, "-n", first.Name, "-c", first.Directory, first.Command); err != nil {
+	if err := client.run(
+		"new-session", "-d", "-s", name,
+		"-n", first.Name,
+		"-c", first.Directory,
+		"-e", "RW_PORT="+strconv.Itoa(first.Port),
+		first.Command,
+	); err != nil {
 		return err
 	}
 	for _, window := range windows[1:] {
-		if err := client.run("new-window", "-d", "-t", name+":", "-n", window.Name, "-c", window.Directory, window.Command); err != nil {
+		if err := client.run(
+			"new-window", "-d", "-t", name+":",
+			"-n", window.Name,
+			"-c", window.Directory,
+			"-e", "RW_PORT="+strconv.Itoa(window.Port),
+			window.Command,
+		); err != nil {
 			return errors.Join(err, client.run("kill-session", "-t", name))
 		}
 	}

@@ -13,16 +13,16 @@ func TestStartDetached(t *testing.T) {
 		return nil
 	}}
 	windows := []Window{
-		{Name: "backend", Command: "just dev-server", Directory: "/repo-feature-a"},
-		{Name: "frontend", Command: "just dev-web", Directory: "/repo-feature-a"},
+		{Name: "backend", Command: "just dev-server", Directory: "/repo-feature-a", Port: 8180},
+		{Name: "frontend", Command: "just dev-web", Directory: "/repo-feature-a", Port: 3100},
 	}
 
 	if err := client.StartDetached("rw-redwood-feature-a-123456789abc", windows); err != nil {
 		t.Fatalf("StartDetached() error = %v", err)
 	}
 	want := [][]string{
-		{"new-session", "-d", "-s", "rw-redwood-feature-a-123456789abc", "-n", "backend", "-c", "/repo-feature-a", "just dev-server"},
-		{"new-window", "-d", "-t", "rw-redwood-feature-a-123456789abc:", "-n", "frontend", "-c", "/repo-feature-a", "just dev-web"},
+		{"new-session", "-d", "-s", "rw-redwood-feature-a-123456789abc", "-n", "backend", "-c", "/repo-feature-a", "-e", "RW_PORT=8180", "just dev-server"},
+		{"new-window", "-d", "-t", "rw-redwood-feature-a-123456789abc:", "-n", "frontend", "-c", "/repo-feature-a", "-e", "RW_PORT=3100", "just dev-web"},
 	}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("StartDetached() args = %v, want %v", got, want)
