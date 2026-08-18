@@ -81,24 +81,42 @@ func (client Client) StartDetached(name string, windows []Window) (bool, error) 
 	if len(windows) == 0 {
 		return false, fmt.Errorf("tmux session requires at least one window")
 	}
-	first := windows[0]
-	if err := client.run(windowArgs(first,
-		"new-session", "-d", "-s", name,
-		"-n", first.Name,
-		"-c", first.Directory,
-	)...); err != nil {
+	commands, err := StartArguments(name, windows)
+	if err != nil {
 		return false, err
 	}
-	for _, window := range windows[1:] {
-		if err := client.run(windowArgs(window,
-			"new-window", "-d", "-t", name+":",
-			"-n", window.Name,
-			"-c", window.Directory,
-		)...); err != nil {
+	if err := client.run(commands[0]...); err != nil {
+		return false, err
+	}
+	for _, command := range commands[1:] {
+		if err := client.run(command...); err != nil {
 			return false, errors.Join(err, client.run("kill-session", "-t", name))
 		}
 	}
 	return false, nil
+}
+
+// StartArguments returns the tmux arguments used to create a detached session.
+// The executable name itself is intentionally omitted from each argument list.
+func StartArguments(name string, windows []Window) ([][]string, error) {
+	if len(windows) == 0 {
+		return nil, fmt.Errorf("tmux session requires at least one window")
+	}
+
+	first := windows[0]
+	commands := [][]string{windowArgs(first,
+		"new-session", "-d", "-s", name,
+		"-n", first.Name,
+		"-c", first.Directory,
+	)}
+	for _, window := range windows[1:] {
+		commands = append(commands, windowArgs(window,
+			"new-window", "-d", "-t", name+":",
+			"-n", window.Name,
+			"-c", window.Directory,
+		))
+	}
+	return commands, nil
 }
 
 func windowArgs(window Window, args ...string) []string {

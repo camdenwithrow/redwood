@@ -171,6 +171,10 @@ Git directory rather than the committed repository.
 rw create feature/foo   Create a worktree and assign its slot
 rw remove feature/foo   Remove a worktree while keeping its branch
 rw start feature/foo    Start its commands in a detached tmux session
+rw start --dry-run feature/foo
+                        Show commands, variables, and tmux arguments without launching
+rw env feature/foo      Show calculated ports and injected variables
+rw config check         Validate and summarize the resolved configuration
 rw attach feature/foo   Attach to its tmux session
 rw stop feature/foo     Stop its tmux session
 rw list                 Show worktrees, ports, and running state
@@ -189,6 +193,24 @@ rw start feature/foo
 rw list
 rw attach feature/foo
 ```
+
+Inspect the resolved configuration and a worktree's runtime environment before
+starting its session:
+
+```sh
+rw config check
+rw env feature/foo
+rw start --dry-run feature/foo
+```
+
+`rw config check` parses and validates `redwood.toml`, verifies the configured
+or auto-detected base branch, and prints a short summary. `rw env` reports the
+worktree's slot, calculated ports, and the variables injected into each command
+window. `rw start --dry-run` adds the command after substituting Redwood's
+injected variables and the exact tmux argument arrays Redwood would execute.
+Variables inherited from the caller, including secrets, are left unexpanded in
+the preview. Dry-run builds the same session plan as `rw start` but does not
+contact or launch tmux.
 
 When invoked from inside tmux, `rw attach` switches the current client to the
 worktree's session instead of attempting a nested attachment. Use
