@@ -141,11 +141,15 @@ worktree session explicitly when it is no longer needed:
 rw stop feature/foo
 ```
 
-Remove a worktree after stopping its session:
+Remove a worktree and any running Redwood-managed session:
 
 ```sh
 rw remove feature/foo
 ```
+
+Before removing the worktree, Redwood stops its managed tmux session when one
+is running. This ends the commands launched by `rw start`; unrelated processes
+are outside Redwood's ownership and are not affected.
 
 The branch is retained. Git refuses the removal when the worktree contains
 uncommitted changes; Redwood reports that Git error without forcing removal.
