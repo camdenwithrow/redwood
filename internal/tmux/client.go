@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
+	"sort"
 	"strings"
 )
 
@@ -16,10 +16,10 @@ type Client struct {
 }
 
 type Window struct {
-	Name      string
-	Command   string
-	Directory string
-	Port      *int
+	Name        string
+	Command     string
+	Directory   string
+	Environment map[string]string
 }
 
 type CommandError struct {
@@ -102,8 +102,13 @@ func (client Client) StartDetached(name string, windows []Window) (bool, error) 
 
 func windowArgs(window Window, args ...string) []string {
 	result := append([]string(nil), args...)
-	if window.Port != nil {
-		result = append(result, "-e", "RW_PORT="+strconv.Itoa(*window.Port))
+	environmentNames := make([]string, 0, len(window.Environment))
+	for name := range window.Environment {
+		environmentNames = append(environmentNames, name)
+	}
+	sort.Strings(environmentNames)
+	for _, name := range environmentNames {
+		result = append(result, "-e", name+"="+window.Environment[name])
 	}
 	if window.Command != "" {
 		result = append(result, window.Command)

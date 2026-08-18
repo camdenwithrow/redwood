@@ -17,8 +17,16 @@ func TestStartDetached(t *testing.T) {
 		return nil
 	}}
 	windows := []Window{
-		{Name: "backend", Command: "just dev-server", Directory: "/repo-feature-a", Port: intPointer(8180)},
-		{Name: "frontend", Command: "just dev-web", Directory: "/repo-feature-a", Port: intPointer(3100)},
+		{Name: "backend", Command: "just dev-server", Directory: "/repo-feature-a", Environment: map[string]string{
+			"RW_PORT":          "8180",
+			"RW_PORT_BACKEND":  "8180",
+			"RW_PORT_FRONTEND": "3100",
+		}},
+		{Name: "frontend", Command: "just dev-web", Directory: "/repo-feature-a", Environment: map[string]string{
+			"RW_PORT":          "3100",
+			"RW_PORT_BACKEND":  "8180",
+			"RW_PORT_FRONTEND": "3100",
+		}},
 	}
 
 	if _, err := client.StartDetached("rw-redwood-feature-a-123456789abc", windows); err != nil {
@@ -26,8 +34,8 @@ func TestStartDetached(t *testing.T) {
 	}
 	want := [][]string{
 		{"has-session", "-t", "=rw-redwood-feature-a-123456789abc"},
-		{"new-session", "-d", "-s", "rw-redwood-feature-a-123456789abc", "-n", "backend", "-c", "/repo-feature-a", "-e", "RW_PORT=8180", "just dev-server"},
-		{"new-window", "-d", "-t", "rw-redwood-feature-a-123456789abc:", "-n", "frontend", "-c", "/repo-feature-a", "-e", "RW_PORT=3100", "just dev-web"},
+		{"new-session", "-d", "-s", "rw-redwood-feature-a-123456789abc", "-n", "backend", "-c", "/repo-feature-a", "-e", "RW_PORT=8180", "-e", "RW_PORT_BACKEND=8180", "-e", "RW_PORT_FRONTEND=3100", "just dev-server"},
+		{"new-window", "-d", "-t", "rw-redwood-feature-a-123456789abc:", "-n", "frontend", "-c", "/repo-feature-a", "-e", "RW_PORT=3100", "-e", "RW_PORT_BACKEND=8180", "-e", "RW_PORT_FRONTEND=3100", "just dev-web"},
 	}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("StartDetached() args = %v, want %v", got, want)
@@ -211,8 +219,4 @@ func missingSessionError(t *testing.T) error {
 		t.Fatalf("create missing session error: %v", err)
 	}
 	return &CommandError{Err: exitError}
-}
-
-func intPointer(value int) *int {
-	return &value
 }

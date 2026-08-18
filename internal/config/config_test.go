@@ -73,6 +73,18 @@ tests = "go test ./..."
 	}
 }
 
+func TestPortEnvironmentVariable(t *testing.T) {
+	for label, want := range map[string]string{
+		"frontend": "RW_PORT_FRONTEND",
+		"user-api": "RW_PORT_USER_API",
+		"Docs UI":  "RW_PORT_DOCS_UI",
+	} {
+		if got := PortEnvironmentVariable(label); got != want {
+			t.Errorf("PortEnvironmentVariable(%q) = %q, want %q", label, got, want)
+		}
+	}
+}
+
 func TestLoadRejectsInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -87,6 +99,8 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		{name: "invalid stride", content: strings.Replace(validConfig, "port_stride = 100", "port_stride = 0", 1), want: "port_stride must be greater than zero"},
 		{name: "invalid port", content: strings.Replace(validConfig, "web = 3000", "web = 70000", 1), want: "ports.web must be between 1 and 65535"},
 		{name: "empty command", content: strings.Replace(validConfig, "web = \"just dev-web\"", "web = \" \"", 1), want: "commands.web must not be empty"},
+		{name: "port label without environment name", content: strings.Replace(validConfig, "web = 3000", "\"---\" = 3000", 1), want: "must contain at least one ASCII letter or digit"},
+		{name: "colliding port environment variables", content: strings.Replace(validConfig, "web = 3000", "web = 3000\n\"WEB\" = 3101", 1), want: "map to the same environment variable RW_PORT_WEB"},
 		{name: "port without command", content: strings.Replace(validConfig, "api = \"just dev-server\"\n", "", 1), want: "ports.api requires a matching commands.api entry"},
 		{name: "ports can collide between slots", content: strings.Replace(validConfig, "api = 8080", "api = 3100", 1), want: "ports.api and ports.web can collide across worktree slots"},
 	}
