@@ -36,6 +36,29 @@ func TestCreateCommandInTemporaryRepository(t *testing.T) {
 	}
 }
 
+func TestPortlessProjectCreatesInteractiveSession(t *testing.T) {
+	project := newTestProject(t)
+	writeFile(t, filepath.Join(project.repository, "redwood.toml"), `base_branch = "main"
+worktree_path = "../{repo}-{branch}"
+`)
+
+	createOutput := project.run(t, "create", "feature/portless")
+	startOutput := project.run(t, "start", "feature/portless")
+	listOutput := project.run(t, "list")
+
+	if strings.Contains(createOutput, "Ports:") {
+		t.Fatalf("rw create output = %q, want no ports section", createOutput)
+	}
+	if !strings.Contains(startOutput, "Started tmux session") {
+		t.Fatalf("rw start output = %q, want started session", startOutput)
+	}
+	if !strings.Contains(listOutput, "feature/portless\t1\trunning\t-") {
+		t.Fatalf("rw list output = %q, want running portless worktree", listOutput)
+	}
+
+	project.run(t, "stop", "feature/portless")
+}
+
 func TestEveryCommandRunsFromMainCheckout(t *testing.T) {
 	project := newTestProject(t)
 

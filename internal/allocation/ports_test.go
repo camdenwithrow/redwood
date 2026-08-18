@@ -48,6 +48,16 @@ func TestCalculatePortsAtSlotZeroUsesBasePorts(t *testing.T) {
 	}
 }
 
+func TestCalculatePortsAllowsEmptyConfiguration(t *testing.T) {
+	ports, err := CalculatePorts(config.Config{}, 2)
+	if err != nil {
+		t.Fatalf("CalculatePorts() error = %v", err)
+	}
+	if len(ports) != 0 {
+		t.Fatalf("CalculatePorts() = %v, want no ports", ports)
+	}
+}
+
 func TestCalculatePortsRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name          string

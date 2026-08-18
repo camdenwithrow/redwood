@@ -13,6 +13,9 @@ func CalculatePorts(configuration config.Config, slot int) (map[string]int, erro
 	if slot < 0 {
 		return nil, fmt.Errorf("slot must not be negative")
 	}
+	if len(configuration.Ports) == 0 {
+		return map[string]int{}, nil
+	}
 	if configuration.PortStride <= 0 {
 		return nil, fmt.Errorf("port_stride must be greater than zero")
 	}

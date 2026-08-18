@@ -18,7 +18,7 @@ type Window struct {
 	Name      string
 	Command   string
 	Directory string
-	Port      int
+	Port      *int
 }
 
 type CommandError struct {
@@ -71,27 +71,34 @@ func (client Client) StartDetached(name string, windows []Window) (bool, error) 
 		return false, fmt.Errorf("tmux session requires at least one window")
 	}
 	first := windows[0]
-	if err := client.run(
+	if err := client.run(windowArgs(first,
 		"new-session", "-d", "-s", name,
 		"-n", first.Name,
 		"-c", first.Directory,
-		"-e", "RW_PORT="+strconv.Itoa(first.Port),
-		first.Command,
-	); err != nil {
+	)...); err != nil {
 		return false, err
 	}
 	for _, window := range windows[1:] {
-		if err := client.run(
+		if err := client.run(windowArgs(window,
 			"new-window", "-d", "-t", name+":",
 			"-n", window.Name,
 			"-c", window.Directory,
-			"-e", "RW_PORT="+strconv.Itoa(window.Port),
-			window.Command,
-		); err != nil {
+		)...); err != nil {
 			return false, errors.Join(err, client.run("kill-session", "-t", name))
 		}
 	}
 	return false, nil
+}
+
+func windowArgs(window Window, args ...string) []string {
+	result := append([]string(nil), args...)
+	if window.Port != nil {
+		result = append(result, "-e", "RW_PORT="+strconv.Itoa(*window.Port))
+	}
+	if window.Command != "" {
+		result = append(result, window.Command)
+	}
+	return result
 }
 
 func (client Client) HasSession(name string) (bool, error) {

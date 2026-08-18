@@ -110,6 +110,28 @@ func TestRunCreatePrintsWorktreeDetails(t *testing.T) {
 	}
 }
 
+func TestRunCreateOmitsPortsWhenNoneAreConfigured(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.createWorktree = func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
+		return worktreemanager.Created{
+			Worktree: repository.Worktree{Path: "/repo-feature-a", Branch: "feature/a"},
+			Slot:     2,
+		}, nil
+	}
+
+	exitCode := run([]string{"create", "feature/a"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	want := "Created worktree feature/a\nPath: /repo-feature-a\nSlot: 2\n"
+	if stdout.String() != want {
+		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
 func TestRunStartPrintsSessionName(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
