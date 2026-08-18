@@ -58,7 +58,7 @@ const usage = `Usage:
   rw <command> [arguments]
 
 Commands:
-  create <branch>  Create a worktree and assign its ports
+  create <branch>  Create a worktree and assign its slot
   start <branch>   Start commands in a detached tmux session
   attach <branch>  Attach to a worktree's tmux session
   stop <branch>    Stop a worktree's tmux session
@@ -197,6 +197,9 @@ func createWorktree(args []string, environment commandEnvironment) error {
 	fmt.Fprintf(environment.stdout, "Created worktree %s\n", created.Worktree.Branch)
 	fmt.Fprintf(environment.stdout, "Path: %s\n", created.Worktree.Path)
 	fmt.Fprintf(environment.stdout, "Slot: %d\n", created.Slot)
+	if len(created.Ports) == 0 {
+		return nil
+	}
 	fmt.Fprintln(environment.stdout, "Ports:")
 	labels := make([]string, 0, len(created.Ports))
 	for label := range created.Ports {

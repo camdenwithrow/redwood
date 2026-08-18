@@ -55,14 +55,8 @@ func (config Config) validate() error {
 	if !strings.Contains(config.WorktreePath, "{branch}") {
 		return fmt.Errorf("worktree_path must contain {branch}")
 	}
-	if config.PortStride <= 0 {
+	if len(config.Ports) > 0 && config.PortStride <= 0 {
 		return fmt.Errorf("port_stride must be greater than zero")
-	}
-	if len(config.Ports) == 0 {
-		return fmt.Errorf("ports must contain at least one entry")
-	}
-	if len(config.Commands) == 0 {
-		return fmt.Errorf("commands must contain at least one entry")
 	}
 
 	portNames := sortedKeys(config.Ports)
@@ -84,9 +78,6 @@ func (config Config) validate() error {
 		}
 		if strings.TrimSpace(command) == "" {
 			return fmt.Errorf("commands.%s must not be empty", name)
-		}
-		if _, ok := config.Ports[name]; !ok {
-			return fmt.Errorf("commands.%s requires a matching ports.%s entry", name, name)
 		}
 	}
 

@@ -51,13 +51,20 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 			labels = append(labels, label)
 		}
 		sort.Strings(labels)
-		windows := make([]tmux.Window, 0, len(labels))
+		windows := make([]tmux.Window, 0, max(1, len(labels)))
+		if len(labels) == 0 {
+			windows = append(windows, tmux.Window{Name: "shell", Directory: worktree.Path})
+		}
 		for _, label := range labels {
+			var portPointer *int
+			if port, exists := ports[label]; exists {
+				portPointer = &port
+			}
 			windows = append(windows, tmux.Window{
 				Name:      label,
 				Command:   configuration.Commands[label],
 				Directory: worktree.Path,
-				Port:      ports[label],
+				Port:      portPointer,
 			})
 		}
 		alreadyRunning, err := client.StartDetached(name, windows)

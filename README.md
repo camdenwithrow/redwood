@@ -2,7 +2,7 @@
 
 Redwood is a small Git worktree and tmux project manager written in Go. It is
 invoked as `rw` from the main repository checkout and coordinates worktrees,
-stable development ports, and detached tmux sessions.
+detached tmux sessions, and optional stable development ports.
 
 ## Prerequisites
 
@@ -34,7 +34,26 @@ When developing Redwood itself, install the current checkout with
 
 ## Configuration
 
-Redwood reads a committed `redwood.toml` from the repository root:
+Redwood reads a committed `redwood.toml` from the repository root. Projects
+that only need a worktree and an interactive tmux shell can use:
+
+```toml
+# Optional; auto-detects a local "main" or "master" when omitted.
+base_branch = "main"
+worktree_path = "../{repo}-{branch}"
+```
+
+With no commands configured, `rw start` creates a `shell` window rooted in the
+worktree. Projects can also define command windows without assigning ports:
+
+```toml
+worktree_path = "../{repo}-{branch}"
+
+[commands]
+tests = "go test ./..."
+```
+
+Projects that run development servers can opt into stable ports:
 
 ```toml
 # Optional; auto-detects a local "main" or "master" when omitted.
@@ -55,9 +74,10 @@ simulator = "just dev-mobile --port $RW_PORT"
 ```
 
 The labels are not built into Redwood; users may define any commands their
-project needs. Each label creates one tmux window and must have one matching
-base port. Redwood sets that command's `RW_PORT` environment variable to
-`base port + slot * port_stride` before starting it.
+project needs. Each label creates one tmux window. When a command has a
+matching port label, Redwood sets that window's `RW_PORT` environment variable
+to `base port + slot * port_stride` before starting it. Commands without a
+matching port run without `RW_PORT`.
 
 Each worktree receives a stable numeric slot, allowing the same command set to
 run in several worktrees without port conflicts. Base ports must have different
@@ -71,9 +91,11 @@ The configuration fields are:
   when exactly one local `main` or `master` branch exists.
 - `worktree_path`: the path template, resolved from the main checkout when
   relative. `{repo}` and `{branch}` expand to filesystem-safe values.
-- `port_stride`: the amount added to every base port for each worktree slot.
-- `[ports]`: user-defined command labels and their base ports.
-- `[commands]`: matching labels and the commands Redwood runs in tmux windows.
+- `port_stride`: the amount added to every base port for each worktree slot;
+  required only when `[ports]` is configured.
+- `[ports]`: optional command labels and their base ports. Every port label must
+  have a matching command.
+- `[commands]`: optional labels and the commands Redwood runs in tmux windows.
 
 Slot allocations are kept in `.git/redwood/allocations.toml`, inside the shared
 Git directory rather than the committed repository.
@@ -81,7 +103,7 @@ Git directory rather than the committed repository.
 ## Commands
 
 ```text
-rw create feature/foo   Create a worktree and assign its ports
+rw create feature/foo   Create a worktree and assign its slot
 rw start feature/foo    Start its commands in a detached tmux session
 rw attach feature/foo   Attach to its tmux session
 rw stop feature/foo     Stop its tmux session
