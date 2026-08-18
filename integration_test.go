@@ -100,6 +100,39 @@ func TestEveryCommandRunsFromMainCheckout(t *testing.T) {
 	}
 }
 
+func TestEveryCommandRunsFromLinkedWorktree(t *testing.T) {
+	project := newTestProject(t)
+	project.run(t, "create", "feature/source")
+	sourcePath := filepath.Join(filepath.Dir(project.repository), "project-feature-source")
+	targetPath := filepath.Join(filepath.Dir(project.repository), "project-feature-target")
+
+	createOutput := project.runFrom(t, sourcePath, "create", "feature/target")
+	startOutput := project.runFrom(t, sourcePath, "start", "feature/target")
+	listOutput := project.runFrom(t, sourcePath, "list")
+	project.runFrom(t, sourcePath, "attach", "feature/target")
+	stopOutput := project.runFrom(t, sourcePath, "stop", "feature/target")
+	removeOutput := project.runFrom(t, sourcePath, "remove", "feature/target")
+
+	if !strings.Contains(createOutput, "Created worktree feature/target") {
+		t.Fatalf("rw create output = %q, want created target", createOutput)
+	}
+	if !strings.Contains(startOutput, "Started tmux session") {
+		t.Fatalf("rw start output = %q, want started session", startOutput)
+	}
+	if !strings.Contains(listOutput, "feature/target\t2\trunning\tapp=4200") {
+		t.Fatalf("rw list output = %q, want running target", listOutput)
+	}
+	if !strings.Contains(stopOutput, "Stopped tmux session") {
+		t.Fatalf("rw stop output = %q, want stopped session", stopOutput)
+	}
+	if !strings.Contains(removeOutput, "Removed worktree feature/target") {
+		t.Fatalf("rw remove output = %q, want removed target", removeOutput)
+	}
+	if _, err := os.Stat(targetPath); !os.IsNotExist(err) {
+		t.Fatalf("removed target path error = %v, want not found", err)
+	}
+}
+
 func TestTwoWorktreesUseDifferentPortsAndRunConcurrently(t *testing.T) {
 	project := newTestProject(t)
 
@@ -217,8 +250,13 @@ esac
 
 func (project testProject) run(t *testing.T, args ...string) string {
 	t.Helper()
+	return project.runFrom(t, project.repository, args...)
+}
+
+func (project testProject) runFrom(t *testing.T, directory string, args ...string) string {
+	t.Helper()
 	command := exec.Command(project.binary, args...)
-	command.Dir = project.repository
+	command.Dir = directory
 	command.Env = append(os.Environ(), project.environment...)
 	output, err := command.CombinedOutput()
 	if err != nil {

@@ -32,7 +32,7 @@ func Discover() (Repository, error) {
 
 func DiscoverFrom(start string) (Repository, error) {
 	runner := gitexec.NewRunner(start)
-	root, err := runner.Output("rev-parse", "--show-toplevel")
+	_, err := runner.Output("rev-parse", "--show-toplevel")
 	if err != nil {
 		return Repository{}, fmt.Errorf("locate repository root: %w", err)
 	}
@@ -42,20 +42,12 @@ func DiscoverFrom(start string) (Repository, error) {
 		return Repository{}, fmt.Errorf("locate shared Git directory: %w", err)
 	}
 
-	root = filepath.Clean(root)
 	gitDir = filepath.Clean(gitDir)
-	expectedGitDir := filepath.Join(root, ".git")
-	if gitDir != expectedGitDir {
-		return Repository{}, fmt.Errorf(
-			"current checkout %q is not the main checkout; run rw from %q",
-			root,
-			filepath.Dir(gitDir),
-		)
-	}
+	mainCheckout := filepath.Dir(gitDir)
 
 	return Repository{
-		Name:         filepath.Base(root),
-		MainCheckout: root,
+		Name:         filepath.Base(mainCheckout),
+		MainCheckout: mainCheckout,
 		GitDir:       gitDir,
 	}, nil
 }

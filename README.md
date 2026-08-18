@@ -113,8 +113,9 @@ rw list                 Show worktrees, ports, and running state
 
 ## Core workflow
 
-Run every Redwood command from the main checkout, even when operating on a
-linked worktree:
+Run Redwood commands from the main checkout or any linked worktree. Redwood
+uses the shared Git directory to find the main checkout, configuration, and all
+other worktrees:
 
 ```sh
 cd /path/to/main-checkout
