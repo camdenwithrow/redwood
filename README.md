@@ -73,6 +73,24 @@ backend = "just dev-server --port $RW_PORT --frontend-port $RW_PORT_FRONTEND"
 simulator = "just dev-mobile --port $RW_PORT"
 ```
 
+Projects can run setup commands immediately after a worktree is created:
+
+```toml
+worktree_path = "../{repo}-{branch}"
+
+[hooks]
+post_create = [
+  "go mod download",
+  "cp .env.example .env",
+]
+```
+
+Post-create hooks run sequentially through `/bin/sh -c`, with the new worktree
+as the working directory. Redwood inherits the invoking process's environment
+and streams each command's input and output. If any hook fails, later hooks do
+not run and Redwood rolls back the worktree, its slot allocation, and any branch
+created by the command. An existing branch is retained during rollback.
+
 The labels are not built into Redwood; users may define any commands their
 project needs. Each label creates one tmux window. When a command has a
 matching port label, Redwood sets that window's `RW_PORT` environment variable
@@ -100,6 +118,8 @@ The configuration fields are:
 - `[ports]`: optional command labels and their base ports. Every port label must
   have a matching command.
 - `[commands]`: optional labels and the commands Redwood runs in tmux windows.
+- `[hooks].post_create`: optional shell commands run in order after creating a
+  worktree and assigning its slot.
 
 Slot allocations are kept in `.git/redwood/allocations.toml`, inside the shared
 Git directory rather than the committed repository.
