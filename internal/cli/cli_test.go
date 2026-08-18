@@ -206,10 +206,10 @@ func TestRunListPrintsWorktreeDetails(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
 	}
-	want := "BRANCH\tSLOT\tRUNNING\tPORTS\tPATH\n" +
-		"main\t0\tstopped\tapi=8080,web=3000\t/repo\n" +
+	want := "BRANCH\tSLOT\tRW_SESSION\tPORTS\tPATH\n" +
+		"main\t0\tnone\tapi=8080,web=3000\t/repo\n" +
 		"feature/a\t2\trunning\tapi=8280,web=3200\t/repo feature a\n" +
-		"(detached)\t-\tstopped\t-\t/repo-detached\n"
+		"(detached)\t-\tnone\t-\t/repo-detached\n"
 	if stdout.String() != want {
 		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
 	}
