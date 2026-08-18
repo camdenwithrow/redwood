@@ -104,6 +104,7 @@ Git directory rather than the committed repository.
 
 ```text
 rw create feature/foo   Create a worktree and assign its slot
+rw remove feature/foo   Remove a worktree while keeping its branch
 rw start feature/foo    Start its commands in a detached tmux session
 rw attach feature/foo   Attach to its tmux session
 rw stop feature/foo     Stop its tmux session
@@ -134,6 +135,15 @@ worktree session explicitly when it is no longer needed:
 ```sh
 rw stop feature/foo
 ```
+
+Remove a worktree after stopping its session:
+
+```sh
+rw remove feature/foo
+```
+
+The branch is retained. Git refuses the removal when the worktree contains
+uncommitted changes; Redwood reports that Git error without forcing removal.
 
 `rw list` prints one tab-separated row per worktree with its branch, slot,
 running state, calculated ports, and path. Redwood does not delete the worktree

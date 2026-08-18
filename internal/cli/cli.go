@@ -20,6 +20,7 @@ type repositoryFinder func() (repository.Repository, error)
 type configLoader func(repositoryRoot string) (config.Config, error)
 type baseBranchResolver func(repo repository.Repository, configured string) (string, error)
 type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
+type worktreeRemover func(repo repository.Repository, branch string) (repository.Worktree, error)
 type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
 type sessionAttacher func(repo repository.Repository, branch string) error
 type sessionStopper func(repo repository.Repository, branch string) (string, error)
@@ -30,6 +31,7 @@ type runtimeDependencies struct {
 	loadConfig        configLoader
 	resolveBaseBranch baseBranchResolver
 	createWorktree    worktreeCreator
+	removeWorktree    worktreeRemover
 	startSession      sessionStarter
 	attachSession     sessionAttacher
 	stopSession       sessionStopper
@@ -41,6 +43,7 @@ type commandEnvironment struct {
 	config     config.Config
 	stdout     io.Writer
 	create     worktreeCreator
+	remove     worktreeRemover
 	start      sessionStarter
 	attach     sessionAttacher
 	stop       sessionStopper
@@ -59,6 +62,7 @@ const usage = `Usage:
 
 Commands:
   create <branch>  Create a worktree and assign its slot
+  remove <branch>  Remove a worktree while keeping its branch
   start <branch>   Start commands in a detached tmux session
   attach <branch>  Attach to a worktree's tmux session
   stop <branch>    Stop a worktree's tmux session
@@ -69,6 +73,7 @@ Run "rw help" to show this message.
 
 var commandSpecs = []commandSpec{
 	{name: "create", arguments: "<branch>", argCount: 1, run: createWorktree},
+	{name: "remove", arguments: "<branch>", argCount: 1, run: removeWorktree},
 	{name: "start", arguments: "<branch>", argCount: 1, run: startSession},
 	{name: "attach", arguments: "<branch>", argCount: 1, run: attachSession},
 	{name: "stop", arguments: "<branch>", argCount: 1, run: stopSession},
@@ -81,6 +86,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		loadConfig:        config.Load,
 		resolveBaseBranch: repository.ResolveBaseBranch,
 		createWorktree:    worktreemanager.Create,
+		removeWorktree:    worktreemanager.Remove,
 		startSession:      session.Start,
 		attachSession:     session.Attach,
 		stopSession:       session.Stop,
@@ -149,6 +155,7 @@ func run(
 		config:     loadedConfig,
 		stdout:     stdout,
 		create:     deps.createWorktree,
+		remove:     deps.removeWorktree,
 		start:      deps.startSession,
 		attach:     deps.attachSession,
 		stop:       deps.stopSession,
@@ -210,6 +217,16 @@ func createWorktree(args []string, environment commandEnvironment) error {
 		fmt.Fprintf(environment.stdout, "  %s: %d\n", label, created.Ports[label])
 	}
 
+	return nil
+}
+
+func removeWorktree(args []string, environment commandEnvironment) error {
+	removed, err := environment.remove(environment.repository, args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(environment.stdout, "Removed worktree %s\n", removed.Branch)
+	fmt.Fprintf(environment.stdout, "Path: %s\n", removed.Path)
 	return nil
 }
 
