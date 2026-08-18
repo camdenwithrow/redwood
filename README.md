@@ -53,6 +53,45 @@ worktree_path = "../{repo}-{branch}"
 tests = "go test ./..."
 ```
 
+String entries are supported for compatibility and run as shell commands. New
+configuration can use command tables to keep arguments and environment values
+separate from shell quoting:
+
+```toml
+worktree_path = "../{repo}-{branch}"
+port_stride = 100
+
+[ports]
+web = 3000
+api = 8080
+
+[commands.web]
+run = ["just", "dev-web", "--host", "127.0.0.1"]
+
+[commands.web.env]
+PORT = "{ports.web}"
+API_URL = "http://localhost:{ports.api}"
+
+[commands.api]
+shell = "just dev-server 2>&1 | tee server.log"
+
+[commands.api.env]
+PORT = "{ports.api}"
+AUTHORIZED_PARTIES = "http://localhost:{ports.web},http://127.0.0.1:{ports.web}"
+```
+
+`run` is an argument array. Redwood passes each item to tmux separately, so
+spaces and shell metacharacters in an argument are not reinterpreted by a
+shell. Use `shell` when a command intentionally needs expansion, pipelines,
+redirection, or other shell features. A command must define exactly one of
+`run` or `shell`.
+
+Environment values are passed directly to the tmux window. A
+`{ports.<label>}` placeholder expands to that service's calculated port for the
+worktree slot. Referenced labels must exist in `[ports]`. Configured `env`
+values are applied after Redwood's generated `RW_PORT` variables, so an
+explicit entry with the same name takes precedence.
+
 Projects that run development servers can opt into stable ports:
 
 ```toml
@@ -118,6 +157,8 @@ The configuration fields are:
 - `[ports]`: optional command labels and their base ports. Every port label must
   have a matching command.
 - `[commands]`: optional labels and the commands Redwood runs in tmux windows.
+  A label may use the legacy shell-string form or a table with a `run` argument
+  array or `shell` string and an optional string-valued `env` table.
 - `[hooks].post_create`: optional shell commands run in order after creating a
   worktree and assigning its slot.
 
@@ -161,11 +202,15 @@ worktree session explicitly when it is no longer needed:
 rw stop feature/foo
 ```
 
-Remove a worktree after stopping its session:
+Remove a worktree and any running Redwood-managed session:
 
 ```sh
 rw remove feature/foo
 ```
+
+Before removing the worktree, Redwood stops its managed tmux session when one
+is running. This ends the commands launched by `rw start`; unrelated processes
+are outside Redwood's ownership and are not affected.
 
 The branch is retained. Git refuses the removal when the worktree contains
 uncommitted changes; Redwood reports that Git error without forcing removal.

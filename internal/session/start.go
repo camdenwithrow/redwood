@@ -61,13 +61,18 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 			portEnvironment[config.PortEnvironmentVariable(label)] = strconv.Itoa(port)
 		}
 		for _, label := range labels {
+			command := configuration.Commands[label]
 			environment := cloneEnvironment(portEnvironment)
 			if port, exists := ports[label]; exists {
 				environment["RW_PORT"] = strconv.Itoa(port)
 			}
+			for name, value := range command.Env {
+				environment[name] = config.ExpandPortPlaceholders(value, ports)
+			}
 			windows = append(windows, tmux.Window{
 				Name:        label,
-				Command:     configuration.Commands[label],
+				Arguments:   append([]string(nil), command.Run...),
+				Shell:       command.Shell,
 				Directory:   worktree.Path,
 				Environment: environment,
 			})
