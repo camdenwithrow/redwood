@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -12,12 +13,77 @@ import (
 const FileName = "redwood.toml"
 
 type Config struct {
-	BaseBranch   string            `toml:"base_branch"`
-	WorktreePath string            `toml:"worktree_path"`
-	PortStride   int               `toml:"port_stride"`
-	Ports        map[string]int    `toml:"ports"`
-	Commands     map[string]string `toml:"commands"`
+	BaseBranch   string             `toml:"base_branch"`
+	WorktreePath string             `toml:"worktree_path"`
+	PortStride   int                `toml:"port_stride"`
+	Ports        map[string]int     `toml:"ports"`
+	Commands     map[string]Command `toml:"commands"`
 }
+
+type Command struct {
+	Run   []string          `toml:"run"`
+	Shell string            `toml:"shell"`
+	Env   map[string]string `toml:"env"`
+}
+
+func (command *Command) UnmarshalTOML(value any) error {
+	switch typed := value.(type) {
+	case string:
+		command.Shell = typed
+		return nil
+	case map[string]any:
+		return decodeCommandTable(command, typed)
+	default:
+		return fmt.Errorf("must be a shell string or table")
+	}
+}
+
+func decodeCommandTable(command *Command, value map[string]any) error {
+	for field, raw := range value {
+		switch field {
+		case "run":
+			arguments, ok := raw.([]any)
+			if !ok {
+				return fmt.Errorf("run must be an array of strings")
+			}
+			command.Run = make([]string, len(arguments))
+			for index, argument := range arguments {
+				text, ok := argument.(string)
+				if !ok {
+					return fmt.Errorf("run[%d] must be a string", index)
+				}
+				command.Run[index] = text
+			}
+		case "shell":
+			text, ok := raw.(string)
+			if !ok {
+				return fmt.Errorf("shell must be a string")
+			}
+			command.Shell = text
+		case "env":
+			environment, ok := raw.(map[string]any)
+			if !ok {
+				return fmt.Errorf("env must be a table of strings")
+			}
+			command.Env = make(map[string]string, len(environment))
+			for name, rawValue := range environment {
+				text, ok := rawValue.(string)
+				if !ok {
+					return fmt.Errorf("env.%s must be a string", name)
+				}
+				command.Env[name] = text
+			}
+		default:
+			return fmt.Errorf("unknown field %s", field)
+		}
+	}
+	return nil
+}
+
+var (
+	environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	portPlaceholderPattern = regexp.MustCompile(`\{ports\.([^{}]+)\}`)
+)
 
 func PortEnvironmentVariable(label string) string {
 	var name strings.Builder
@@ -35,6 +101,13 @@ func PortEnvironmentVariable(label string) string {
 		}
 	}
 	return strings.TrimSuffix(name.String(), "_")
+}
+
+func ExpandPortPlaceholders(value string, ports map[string]int) string {
+	return portPlaceholderPattern.ReplaceAllStringFunc(value, func(placeholder string) string {
+		label := strings.TrimSuffix(strings.TrimPrefix(placeholder, "{ports."), "}")
+		return fmt.Sprint(ports[label])
+	})
 }
 
 func Load(repositoryRoot string) (Config, error) {
@@ -108,8 +181,24 @@ func (config Config) validate() error {
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("commands contains an empty name")
 		}
-		if strings.TrimSpace(command) == "" {
-			return fmt.Errorf("commands.%s must not be empty", name)
+		if len(command.Run) > 0 && strings.TrimSpace(command.Shell) != "" {
+			return fmt.Errorf("commands.%s must define only one of run or shell", name)
+		}
+		if len(command.Run) == 0 && strings.TrimSpace(command.Shell) == "" {
+			return fmt.Errorf("commands.%s must define run or shell", name)
+		}
+		if len(command.Run) > 0 && strings.TrimSpace(command.Run[0]) == "" {
+			return fmt.Errorf("commands.%s.run[0] must not be empty", name)
+		}
+		for _, environmentName := range sortedKeys(command.Env) {
+			if !environmentNamePattern.MatchString(environmentName) {
+				return fmt.Errorf("commands.%s.env contains invalid environment variable name %q", name, environmentName)
+			}
+			for _, match := range portPlaceholderPattern.FindAllStringSubmatch(command.Env[environmentName], -1) {
+				if _, exists := config.Ports[match[1]]; !exists {
+					return fmt.Errorf("commands.%s.env.%s references unknown port %q", name, environmentName, match[1])
+				}
+			}
 		}
 	}
 

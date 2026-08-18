@@ -17,12 +17,12 @@ func TestStartDetached(t *testing.T) {
 		return nil
 	}}
 	windows := []Window{
-		{Name: "backend", Command: "just dev-server", Directory: "/repo-feature-a", Environment: map[string]string{
+		{Name: "backend", Shell: "just dev-server | tee server.log", Directory: "/repo-feature-a", Environment: map[string]string{
 			"RW_PORT":          "8180",
 			"RW_PORT_BACKEND":  "8180",
 			"RW_PORT_FRONTEND": "3100",
 		}},
-		{Name: "frontend", Command: "just dev-web", Directory: "/repo-feature-a", Environment: map[string]string{
+		{Name: "frontend", Arguments: []string{"just", "dev-web", "--host", "127.0.0.1"}, Directory: "/repo-feature-a", Environment: map[string]string{
 			"RW_PORT":          "3100",
 			"RW_PORT_BACKEND":  "8180",
 			"RW_PORT_FRONTEND": "3100",
@@ -34,8 +34,8 @@ func TestStartDetached(t *testing.T) {
 	}
 	want := [][]string{
 		{"has-session", "-t", "=rw-redwood-feature-a-123456789abc"},
-		{"new-session", "-d", "-s", "rw-redwood-feature-a-123456789abc", "-n", "backend", "-c", "/repo-feature-a", "-e", "RW_PORT=8180", "-e", "RW_PORT_BACKEND=8180", "-e", "RW_PORT_FRONTEND=3100", "just dev-server"},
-		{"new-window", "-d", "-t", "rw-redwood-feature-a-123456789abc:", "-n", "frontend", "-c", "/repo-feature-a", "-e", "RW_PORT=3100", "-e", "RW_PORT_BACKEND=8180", "-e", "RW_PORT_FRONTEND=3100", "just dev-web"},
+		{"new-session", "-d", "-s", "rw-redwood-feature-a-123456789abc", "-n", "backend", "-c", "/repo-feature-a", "-e", "RW_PORT=8180", "-e", "RW_PORT_BACKEND=8180", "-e", "RW_PORT_FRONTEND=3100", "just dev-server | tee server.log"},
+		{"new-window", "-d", "-t", "rw-redwood-feature-a-123456789abc:", "-n", "frontend", "-c", "/repo-feature-a", "-e", "RW_PORT=3100", "-e", "RW_PORT_BACKEND=8180", "-e", "RW_PORT_FRONTEND=3100", "just", "dev-web", "--host", "127.0.0.1"},
 	}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("StartDetached() args = %v, want %v", got, want)
@@ -88,7 +88,7 @@ func TestStartDetachedKillsPartialSession(t *testing.T) {
 		}
 		return nil
 	}}
-	windows := []Window{{Name: "one", Command: "first"}, {Name: "two", Command: "second"}}
+	windows := []Window{{Name: "one", Shell: "first"}, {Name: "two", Shell: "second"}}
 
 	if _, err := client.StartDetached("session", windows); err == nil {
 		t.Fatal("StartDetached() error = nil, want window error")

@@ -17,7 +17,8 @@ type Client struct {
 
 type Window struct {
 	Name        string
-	Command     string
+	Arguments   []string
+	Shell       string
 	Directory   string
 	Environment map[string]string
 }
@@ -110,8 +111,10 @@ func windowArgs(window Window, args ...string) []string {
 	for _, name := range environmentNames {
 		result = append(result, "-e", name+"="+window.Environment[name])
 	}
-	if window.Command != "" {
-		result = append(result, window.Command)
+	if len(window.Arguments) > 0 {
+		result = append(result, window.Arguments...)
+	} else if window.Shell != "" {
+		result = append(result, window.Shell)
 	}
 	return result
 }
