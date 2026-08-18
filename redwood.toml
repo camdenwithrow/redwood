@@ -1,2 +1,2 @@
 base_branch = "main"
-worktree_path = "../{repo}-{branch}"
+worktree_path = "../worktrees/{repo}/{branch}"
