@@ -69,7 +69,7 @@ simulator = 8081
 
 [commands]
 frontend = "just dev-web --port $RW_PORT"
-backend = "just dev-server --port $RW_PORT"
+backend = "just dev-server --port $RW_PORT --frontend-port $RW_PORT_FRONTEND"
 simulator = "just dev-mobile --port $RW_PORT"
 ```
 
@@ -77,13 +77,17 @@ The labels are not built into Redwood; users may define any commands their
 project needs. Each label creates one tmux window. When a command has a
 matching port label, Redwood sets that window's `RW_PORT` environment variable
 to `base port + slot * port_stride` before starting it. Commands without a
-matching port run without `RW_PORT`.
+matching port run without `RW_PORT`. Every command also receives every
+configured service port as `RW_PORT_<LABEL>`, so services in the same worktree
+can discover one another. Labels are uppercased and non-alphanumeric runs become
+underscores; for example, `user-api` becomes `RW_PORT_USER_API`. Labels that
+would produce the same environment variable are rejected.
 
 Each worktree receives a stable numeric slot, allowing the same command set to
 run in several worktrees without port conflicts. Base ports must have different
 remainders when divided by `port_stride`, which prevents one command's port in
 one slot from colliding with another command in a different slot. Redwood only
-supplies `RW_PORT`; Doppler remains responsible for secrets.
+supplies these port variables; Doppler remains responsible for secrets.
 
 The configuration fields are:
 

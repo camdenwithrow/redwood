@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redwood"
+  short_description: "Manage Git worktrees and tmux sessions"
+  default_prompt: "Use $redwood to manage parallel Git worktrees and tmux sessions for this repository."

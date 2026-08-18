@@ -1,6 +1,7 @@
 package session
 
 import (
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,8 +51,18 @@ func TestStartCreatesDetachedSessionForBranch(t *testing.T) {
 			t.Fatalf("start() window directory = %q, want %q", window.Directory, repo.MainCheckout)
 		}
 	}
-	if client.windows[0].Port == nil || *client.windows[0].Port != 8080 || client.windows[1].Port == nil || *client.windows[1].Port != 3000 {
-		t.Fatalf("start() window ports = %v, want calculated slot-zero ports", client.windows)
+	backendEnvironment := map[string]string{
+		"RW_PORT":          "8080",
+		"RW_PORT_BACKEND":  "8080",
+		"RW_PORT_FRONTEND": "3000",
+	}
+	frontendEnvironment := map[string]string{
+		"RW_PORT":          "3000",
+		"RW_PORT_BACKEND":  "8080",
+		"RW_PORT_FRONTEND": "3000",
+	}
+	if !maps.Equal(client.windows[0].Environment, backendEnvironment) || !maps.Equal(client.windows[1].Environment, frontendEnvironment) {
+		t.Fatalf("start() window environments = %v, want all calculated ports", client.windows)
 	}
 }
 
@@ -67,7 +78,7 @@ func TestStartCreatesShellWindowWithoutCommands(t *testing.T) {
 		t.Fatalf("start() windows = %v, want one shell window", client.windows)
 	}
 	window := client.windows[0]
-	if window.Name != "shell" || window.Command != "" || window.Directory != repo.MainCheckout || window.Port != nil {
+	if window.Name != "shell" || window.Command != "" || window.Directory != repo.MainCheckout || len(window.Environment) != 0 {
 		t.Fatalf("start() shell window = %+v, want default shell in %q", window, repo.MainCheckout)
 	}
 }
@@ -81,7 +92,7 @@ func TestStartCreatesCommandWindowWithoutPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start() error = %v", err)
 	}
-	if len(client.windows) != 1 || client.windows[0].Command != "go test ./..." || client.windows[0].Port != nil {
+	if len(client.windows) != 1 || client.windows[0].Command != "go test ./..." || len(client.windows[0].Environment) != 0 {
 		t.Fatalf("start() windows = %v, want command without port", client.windows)
 	}
 }

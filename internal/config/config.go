@@ -19,6 +19,24 @@ type Config struct {
 	Commands     map[string]string `toml:"commands"`
 }
 
+func PortEnvironmentVariable(label string) string {
+	var name strings.Builder
+	name.WriteString("RW_PORT_")
+	previousUnderscore := true
+	for _, character := range strings.ToUpper(label) {
+		if character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' {
+			name.WriteRune(character)
+			previousUnderscore = false
+			continue
+		}
+		if !previousUnderscore {
+			name.WriteByte('_')
+			previousUnderscore = true
+		}
+	}
+	return strings.TrimSuffix(name.String(), "_")
+}
+
 func Load(repositoryRoot string) (Config, error) {
 	configPath := filepath.Join(repositoryRoot, FileName)
 	loaded := Config{}
@@ -60,6 +78,7 @@ func (config Config) validate() error {
 	}
 
 	portNames := sortedKeys(config.Ports)
+	portEnvironmentVariables := make(map[string]string, len(portNames))
 	for _, name := range portNames {
 		port := config.Ports[name]
 		if strings.TrimSpace(name) == "" {
@@ -68,6 +87,19 @@ func (config Config) validate() error {
 		if port < 1 || port > 65535 {
 			return fmt.Errorf("ports.%s must be between 1 and 65535", name)
 		}
+		environmentVariable := PortEnvironmentVariable(name)
+		if environmentVariable == "RW_PORT" {
+			return fmt.Errorf("ports.%s must contain at least one ASCII letter or digit", name)
+		}
+		if existingName, exists := portEnvironmentVariables[environmentVariable]; exists {
+			return fmt.Errorf(
+				"ports.%s and ports.%s map to the same environment variable %s",
+				existingName,
+				name,
+				environmentVariable,
+			)
+		}
+		portEnvironmentVariables[environmentVariable] = name
 	}
 
 	commandNames := sortedKeys(config.Commands)

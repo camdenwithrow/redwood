@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/camdenwithrow/redwood/internal/allocation"
 	"github.com/camdenwithrow/redwood/internal/config"
@@ -55,16 +56,20 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 		if len(labels) == 0 {
 			windows = append(windows, tmux.Window{Name: "shell", Directory: worktree.Path})
 		}
+		portEnvironment := make(map[string]string, len(ports))
+		for label, port := range ports {
+			portEnvironment[config.PortEnvironmentVariable(label)] = strconv.Itoa(port)
+		}
 		for _, label := range labels {
-			var portPointer *int
+			environment := cloneEnvironment(portEnvironment)
 			if port, exists := ports[label]; exists {
-				portPointer = &port
+				environment["RW_PORT"] = strconv.Itoa(port)
 			}
 			windows = append(windows, tmux.Window{
-				Name:      label,
-				Command:   configuration.Commands[label],
-				Directory: worktree.Path,
-				Port:      portPointer,
+				Name:        label,
+				Command:     configuration.Commands[label],
+				Directory:   worktree.Path,
+				Environment: environment,
 			})
 		}
 		alreadyRunning, err := client.StartDetached(name, windows)
@@ -75,6 +80,14 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 	}
 
 	return Started{}, fmt.Errorf("branch %q has no worktree", branch)
+}
+
+func cloneEnvironment(environment map[string]string) map[string]string {
+	cloned := make(map[string]string, len(environment)+1)
+	for name, value := range environment {
+		cloned[name] = value
+	}
+	return cloned
 }
 
 func worktreeForBranch(repo repository.Repository, branch string) (repository.Worktree, error) {
