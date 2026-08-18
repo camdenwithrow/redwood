@@ -30,21 +30,28 @@ func TestDiscoverFromMainCheckout(t *testing.T) {
 	}
 }
 
-func TestDiscoverFromRejectsLinkedWorktree(t *testing.T) {
+func TestDiscoverFromLinkedWorktree(t *testing.T) {
 	repositoryRoot := initializeCommittedRepository(t, "main")
 
 	worktreePath := filepath.Join(t.TempDir(), "linked")
 	runGit(t, repositoryRoot, "worktree", "add", "-b", "feature/test", worktreePath)
+	nestedDirectory := filepath.Join(worktreePath, "one", "two")
+	if err := os.MkdirAll(nestedDirectory, 0o755); err != nil {
+		t.Fatalf("create nested directory: %v", err)
+	}
 
-	_, err := DiscoverFrom(worktreePath)
-	if err == nil {
-		t.Fatal("DiscoverFrom() error = nil, want linked worktree error")
+	discovered, err := DiscoverFrom(nestedDirectory)
+	if err != nil {
+		t.Fatalf("DiscoverFrom() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "is not the main checkout") {
-		t.Fatalf("DiscoverFrom() error = %q, want main checkout guidance", err)
+	if discovered.Name != "repository" {
+		t.Fatalf("DiscoverFrom() name = %q, want repository", discovered.Name)
 	}
-	if !strings.Contains(err.Error(), repositoryRoot) {
-		t.Fatalf("DiscoverFrom() error = %q, want main checkout path %q", err, repositoryRoot)
+	if discovered.MainCheckout != repositoryRoot {
+		t.Fatalf("DiscoverFrom() main checkout = %q, want %q", discovered.MainCheckout, repositoryRoot)
+	}
+	if want := filepath.Join(repositoryRoot, ".git"); discovered.GitDir != want {
+		t.Fatalf("DiscoverFrom() GitDir = %q, want %q", discovered.GitDir, want)
 	}
 }
 
