@@ -28,9 +28,9 @@ func (starter *fakeStarter) StartDetached(name string, windows []tmux.Window) (b
 func TestStartCreatesDetachedSessionForBranch(t *testing.T) {
 	repo := initializeRepository(t)
 	client := &fakeStarter{}
-	configuration := config.Config{Commands: map[string]string{
-		"frontend": "just dev-web",
-		"backend":  "just dev-server",
+	configuration := config.Config{Commands: map[string]config.Command{
+		"frontend": {Run: []string{"just", "dev-web"}},
+		"backend":  {Shell: "just dev-server"},
 	}, Ports: map[string]int{
 		"frontend": 3000,
 		"backend":  8080,
@@ -78,7 +78,7 @@ func TestStartCreatesShellWindowWithoutCommands(t *testing.T) {
 		t.Fatalf("start() windows = %v, want one shell window", client.windows)
 	}
 	window := client.windows[0]
-	if window.Name != "shell" || window.Command != "" || window.Directory != repo.MainCheckout || len(window.Environment) != 0 {
+	if window.Name != "shell" || len(window.Arguments) != 0 || window.Shell != "" || window.Directory != repo.MainCheckout || len(window.Environment) != 0 {
 		t.Fatalf("start() shell window = %+v, want default shell in %q", window, repo.MainCheckout)
 	}
 }
@@ -86,13 +86,13 @@ func TestStartCreatesShellWindowWithoutCommands(t *testing.T) {
 func TestStartCreatesCommandWindowWithoutPort(t *testing.T) {
 	repo := initializeRepository(t)
 	client := &fakeStarter{}
-	configuration := config.Config{Commands: map[string]string{"tests": "go test ./..."}}
+	configuration := config.Config{Commands: map[string]config.Command{"tests": {Shell: "go test ./..."}}}
 
 	_, err := start(repo, configuration, "main", client)
 	if err != nil {
 		t.Fatalf("start() error = %v", err)
 	}
-	if len(client.windows) != 1 || client.windows[0].Command != "go test ./..." || len(client.windows[0].Environment) != 0 {
+	if len(client.windows) != 1 || client.windows[0].Shell != "go test ./..." || len(client.windows[0].Environment) != 0 {
 		t.Fatalf("start() windows = %v, want command without port", client.windows)
 	}
 }
@@ -101,7 +101,7 @@ func TestStartReportsExistingSession(t *testing.T) {
 	repo := initializeRepository(t)
 	client := &fakeStarter{alreadyRunning: true}
 	configuration := config.Config{
-		Commands:   map[string]string{"web": "just dev-web"},
+		Commands:   map[string]config.Command{"web": {Shell: "just dev-web"}},
 		Ports:      map[string]int{"web": 3000},
 		PortStride: 100,
 	}
@@ -112,6 +112,43 @@ func TestStartReportsExistingSession(t *testing.T) {
 	}
 	if !started.AlreadyRunning {
 		t.Fatal("start() AlreadyRunning = false, want true")
+	}
+}
+
+func TestStartExpandsStructuredEnvironmentAndPreservesArguments(t *testing.T) {
+	repo := initializeRepository(t)
+	client := &fakeStarter{}
+	configuration := config.Config{
+		Commands: map[string]config.Command{
+			"web": {
+				Run: []string{"just", "dev-web", "--host", "127.0.0.1"},
+				Env: map[string]string{
+					"PORT":    "{ports.web}",
+					"API_URL": "http://localhost:{ports.api}",
+				},
+			},
+			"api": {Shell: "just dev-server | tee server.log"},
+		},
+		Ports:      map[string]int{"web": 3000, "api": 8080},
+		PortStride: 100,
+	}
+
+	_, err := start(repo, configuration, "main", client)
+	if err != nil {
+		t.Fatalf("start() error = %v", err)
+	}
+	web := client.windows[1]
+	if !maps.Equal(web.Environment, map[string]string{
+		"RW_PORT": "3000", "RW_PORT_API": "8080", "RW_PORT_WEB": "3000",
+		"PORT": "3000", "API_URL": "http://localhost:8080",
+	}) {
+		t.Fatalf("start() web environment = %v", web.Environment)
+	}
+	if len(web.Arguments) != 4 || web.Arguments[0] != "just" || web.Arguments[3] != "127.0.0.1" || web.Shell != "" {
+		t.Fatalf("start() web command = arguments %v, shell %q", web.Arguments, web.Shell)
+	}
+	if client.windows[0].Shell != "just dev-server | tee server.log" {
+		t.Fatalf("start() api shell = %q", client.windows[0].Shell)
 	}
 }
 
