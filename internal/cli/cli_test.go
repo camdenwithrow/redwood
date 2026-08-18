@@ -39,6 +39,7 @@ func TestRunUsageErrors(t *testing.T) {
 		{name: "unknown command", args: []string{"launch"}, want: `rw: unknown command "launch"`},
 		{name: "missing branch", args: []string{"create"}, want: "rw: create requires <branch>"},
 		{name: "extra branch", args: []string{"start", "one", "two"}, want: "rw: start accepts exactly one <branch> argument"},
+		{name: "missing remove branch", args: []string{"remove"}, want: "rw: remove requires <branch>"},
 		{name: "list argument", args: []string{"list", "feature/a"}, want: "rw: list does not accept arguments"},
 	}
 
@@ -127,6 +128,25 @@ func TestRunCreateOmitsPortsWhenNoneAreConfigured(t *testing.T) {
 		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
 	}
 	want := "Created worktree feature/a\nPath: /repo-feature-a\nSlot: 2\n"
+	if stdout.String() != want {
+		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRunRemovePrintsWorktreeDetails(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.removeWorktree = func(repository.Repository, string) (repository.Worktree, error) {
+		return repository.Worktree{Path: "/repo-feature-a", Branch: "feature/a"}, nil
+	}
+
+	exitCode := run([]string{"remove", "feature/a"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	want := "Removed worktree feature/a\nPath: /repo-feature-a\n"
 	if stdout.String() != want {
 		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
 	}
@@ -292,6 +312,9 @@ func successfulDependencies() runtimeDependencies {
 		},
 		createWorktree: func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
 			return worktreemanager.Created{}, nil
+		},
+		removeWorktree: func(repository.Repository, string) (repository.Worktree, error) {
+			return repository.Worktree{}, nil
 		},
 		startSession: func(repository.Repository, config.Config, string) (session.Started, error) {
 			return session.Started{Name: "rw-redwood-main-123456789abc"}, nil

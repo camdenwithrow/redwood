@@ -59,6 +59,27 @@ worktree_path = "../{repo}-{branch}"
 	project.run(t, "stop", "feature/portless")
 }
 
+func TestRemoveCommandDeletesWorktreeButKeepsBranch(t *testing.T) {
+	project := newTestProject(t)
+	project.run(t, "create", "feature/remove")
+	worktreePath := filepath.Join(filepath.Dir(project.repository), "project-feature-remove")
+
+	output := project.run(t, "remove", "feature/remove")
+
+	if !strings.Contains(output, "Removed worktree feature/remove") {
+		t.Fatalf("rw remove output = %q, want removed branch", output)
+	}
+	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		t.Fatalf("removed worktree path error = %v, want not found", err)
+	}
+	if output := gitOutput(t, project.repository, "branch", "--list", "feature/remove"); output != "feature/remove" {
+		t.Fatalf("git branch --list output = %q, want retained branch", output)
+	}
+	if listOutput := project.run(t, "list"); strings.Contains(listOutput, "feature/remove") {
+		t.Fatalf("rw list output = %q, want removed worktree absent", listOutput)
+	}
+}
+
 func TestEveryCommandRunsFromMainCheckout(t *testing.T) {
 	project := newTestProject(t)
 
