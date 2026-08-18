@@ -9,6 +9,7 @@ import (
 	"github.com/camdenwithrow/redwood/internal/config"
 	"github.com/camdenwithrow/redwood/internal/repository"
 	"github.com/camdenwithrow/redwood/internal/session"
+	"github.com/camdenwithrow/redwood/internal/tmux"
 	worktreemanager "github.com/camdenwithrow/redwood/internal/worktree"
 )
 
@@ -41,6 +42,9 @@ func TestRunUsageErrors(t *testing.T) {
 		{name: "extra branch", args: []string{"start", "one", "two"}, want: "rw: start accepts exactly one <branch> argument"},
 		{name: "missing remove branch", args: []string{"remove"}, want: "rw: remove requires <branch>"},
 		{name: "list argument", args: []string{"list", "feature/a"}, want: "rw: list does not accept arguments"},
+		{name: "missing env branch", args: []string{"env"}, want: "rw: env requires <branch>"},
+		{name: "invalid config subcommand", args: []string{"config", "show"}, want: "rw: config requires the check subcommand"},
+		{name: "missing dry-run branch", args: []string{"start", "--dry-run", "feature/a", "extra"}, want: "rw: start requires <branch> or --dry-run <branch>"},
 	}
 
 	for _, test := range tests {
@@ -184,6 +188,89 @@ func TestRunStartReportsExistingSession(t *testing.T) {
 	}
 }
 
+func TestRunConfigCheckSummarizesValidatedConfiguration(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.loadConfig = func(string) (config.Config, error) {
+		return config.Config{
+			BaseBranch: "main",
+			Commands:   map[string]string{"api": "just api", "web": "just web"},
+			Ports:      map[string]int{"api": 8080},
+		}, nil
+	}
+
+	exitCode := run([]string{"config", "check"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	want := "Configuration valid\nPath: /repo/redwood.toml\nBase branch: main\nCommands: 2\nPorts: 1\n"
+	if stdout.String() != want {
+		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRunEnvShowsCalculatedPortsAndInjectedVariables(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	started := false
+	deps.startSession = func(repository.Repository, config.Config, string) (session.Started, error) {
+		started = true
+		return session.Started{}, nil
+	}
+	deps.planSession = func(repository.Repository, config.Config, string) (session.Plan, error) {
+		return inspectionPlan(), nil
+	}
+
+	exitCode := run([]string{"env", "feature/a"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	if started {
+		t.Fatal("run() started a session during environment inspection")
+	}
+	want := "Branch: feature/a\nPath: /repo-feature-a\nSlot: 2\nSession: rw-repo-feature-a-abc\n" +
+		"Ports:\n  api=8280\n  web=3200\nWindows:\n  api:\n    Environment:\n" +
+		"      RW_PORT=8280\n      RW_PORT_API=8280\n      RW_PORT_WEB=3200\n"
+	if stdout.String() != want {
+		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRunStartDryRunShowsExpandedCommandAndTmuxArguments(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	deps := successfulDependencies()
+	started := false
+	deps.startSession = func(repository.Repository, config.Config, string) (session.Started, error) {
+		started = true
+		return session.Started{}, nil
+	}
+	deps.planSession = func(repository.Repository, config.Config, string) (session.Plan, error) {
+		return inspectionPlan(), nil
+	}
+
+	exitCode := run([]string{"start", "--dry-run", "feature/a"}, &stdout, &stderr, deps)
+
+	if exitCode != 0 {
+		t.Fatalf("run() exit code = %d, want 0; stderr = %q", exitCode, stderr.String())
+	}
+	if started {
+		t.Fatal("run() started a session during dry-run")
+	}
+	for _, want := range []string{
+		"Expanded command: just api --port 8280 --web 3200 --token $TOKEN\n",
+		`Tmux arguments: ["new-session","-d","-s","rw-repo-feature-a-abc","-n","api","-c","/repo-feature-a","-e","RW_PORT=8280","-e","RW_PORT_API=8280","-e","RW_PORT_WEB=3200","just api --port $RW_PORT --web ${RW_PORT_WEB} --token $TOKEN"]`,
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("run() stdout = %q, want it to contain %q", stdout.String(), want)
+		}
+	}
+}
+
 func TestRunStopPrintsSessionName(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -319,6 +406,9 @@ func successfulDependencies() runtimeDependencies {
 		startSession: func(repository.Repository, config.Config, string) (session.Started, error) {
 			return session.Started{Name: "rw-redwood-main-123456789abc"}, nil
 		},
+		planSession: func(repository.Repository, config.Config, string) (session.Plan, error) {
+			return inspectionPlan(), nil
+		},
 		attachSession: func(repository.Repository, string) error { return nil },
 		stopSession: func(repository.Repository, string) (string, error) {
 			return "rw-redwood-main-123456789abc", nil
@@ -326,5 +416,28 @@ func successfulDependencies() runtimeDependencies {
 		listWorktrees: func(repository.Repository, config.Config) ([]worktreemanager.Info, error) {
 			return nil, nil
 		},
+	}
+}
+
+func inspectionPlan() session.Plan {
+	return session.Plan{
+		Name:   "rw-repo-feature-a-abc",
+		Branch: "feature/a",
+		Path:   "/repo-feature-a",
+		Slot:   2,
+		Ports:  map[string]int{"web": 3200, "api": 8280},
+		Windows: []tmux.Window{{
+			Name:      "api",
+			Command:   "just api --port $RW_PORT --web ${RW_PORT_WEB} --token $TOKEN",
+			Directory: "/repo-feature-a",
+			Environment: map[string]string{
+				"RW_PORT": "8280", "RW_PORT_API": "8280", "RW_PORT_WEB": "3200",
+			},
+		}},
+		TmuxArgs: [][]string{{
+			"new-session", "-d", "-s", "rw-repo-feature-a-abc", "-n", "api", "-c", "/repo-feature-a",
+			"-e", "RW_PORT=8280", "-e", "RW_PORT_API=8280", "-e", "RW_PORT_WEB=3200",
+			"just api --port $RW_PORT --web ${RW_PORT_WEB} --token $TOKEN",
+		}},
 	}
 }

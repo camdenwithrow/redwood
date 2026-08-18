@@ -76,6 +76,25 @@ func TestStartDetachedRequiresWindow(t *testing.T) {
 	}
 }
 
+func TestStartArgumentsReturnsExactCommandsWithoutRunningTmux(t *testing.T) {
+	windows := []Window{
+		{Name: "api", Command: "just api", Directory: "/repo", Environment: map[string]string{"Z": "last", "A": "first"}},
+		{Name: "web", Command: "just web", Directory: "/repo"},
+	}
+
+	got, err := StartArguments("session", windows)
+	if err != nil {
+		t.Fatalf("StartArguments() error = %v", err)
+	}
+	want := [][]string{
+		{"new-session", "-d", "-s", "session", "-n", "api", "-c", "/repo", "-e", "A=first", "-e", "Z=last", "just api"},
+		{"new-window", "-d", "-t", "session:", "-n", "web", "-c", "/repo", "just web"},
+	}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Fatalf("StartArguments() = %v, want %v", got, want)
+	}
+}
+
 func TestStartDetachedKillsPartialSession(t *testing.T) {
 	var commands []string
 	client := Client{run: func(args ...string) error {

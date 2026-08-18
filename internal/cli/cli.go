@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,6 +24,7 @@ type baseBranchResolver func(repo repository.Repository, configured string) (str
 type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
 type worktreeRemover func(repo repository.Repository, branch string) (repository.Worktree, error)
 type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
+type sessionPlanner func(repo repository.Repository, configuration config.Config, branch string) (session.Plan, error)
 type sessionAttacher func(repo repository.Repository, branch string) error
 type sessionStopper func(repo repository.Repository, branch string) (string, error)
 type worktreeLister func(repo repository.Repository, configuration config.Config) ([]worktreemanager.Info, error)
@@ -33,6 +36,7 @@ type runtimeDependencies struct {
 	createWorktree    worktreeCreator
 	removeWorktree    worktreeRemover
 	startSession      sessionStarter
+	planSession       sessionPlanner
 	attachSession     sessionAttacher
 	stopSession       sessionStopper
 	listWorktrees     worktreeLister
@@ -45,6 +49,7 @@ type commandEnvironment struct {
 	create     worktreeCreator
 	remove     worktreeRemover
 	start      sessionStarter
+	plan       sessionPlanner
 	attach     sessionAttacher
 	stop       sessionStopper
 	list       worktreeLister
@@ -64,6 +69,10 @@ Commands:
   create <branch>  Create a worktree and assign its slot
   remove <branch>  Remove a worktree while keeping its branch
   start <branch>   Start commands in a detached tmux session
+  start --dry-run <branch>
+                   Show the session plan without launching tmux
+  env <branch>     Show calculated ports and injected variables
+  config check     Validate and summarize redwood.toml
   attach <branch>  Attach to a worktree's tmux session
   stop <branch>    Stop a worktree's tmux session
   list             Show worktrees, ports, and running state
@@ -74,7 +83,9 @@ Run "rw help" to show this message.
 var commandSpecs = []commandSpec{
 	{name: "create", arguments: "<branch>", argCount: 1, run: createWorktree},
 	{name: "remove", arguments: "<branch>", argCount: 1, run: removeWorktree},
-	{name: "start", arguments: "<branch>", argCount: 1, run: startSession},
+	{name: "start", arguments: "[--dry-run] <branch>", argCount: -1, run: startSession},
+	{name: "env", arguments: "<branch>", argCount: 1, run: inspectEnvironment},
+	{name: "config", arguments: "check", argCount: -1, run: checkConfig},
 	{name: "attach", arguments: "<branch>", argCount: 1, run: attachSession},
 	{name: "stop", arguments: "<branch>", argCount: 1, run: stopSession},
 	{name: "list", argCount: 0, run: listWorktrees},
@@ -88,6 +99,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		createWorktree:    worktreemanager.Create,
 		removeWorktree:    worktreemanager.Remove,
 		startSession:      session.Start,
+		planSession:       session.BuildPlan,
 		attachSession:     session.Attach,
 		stopSession:       session.Stop,
 		listWorktrees:     worktreemanager.List,
@@ -122,8 +134,8 @@ func run(
 	}
 
 	commandArgs := args[1:]
-	if len(commandArgs) != spec.argCount {
-		fmt.Fprintf(stderr, "rw: %s\nUsage: rw %s", argumentError(*spec, len(commandArgs)), spec.name)
+	if message := validateArguments(*spec, commandArgs); message != "" {
+		fmt.Fprintf(stderr, "rw: %s\nUsage: rw %s", message, spec.name)
 		if spec.arguments != "" {
 			fmt.Fprintf(stderr, " %s", spec.arguments)
 		}
@@ -157,6 +169,7 @@ func run(
 		create:     deps.createWorktree,
 		remove:     deps.removeWorktree,
 		start:      deps.startSession,
+		plan:       deps.planSession,
 		attach:     deps.attachSession,
 		stop:       deps.stopSession,
 		list:       deps.listWorktrees,
@@ -183,7 +196,16 @@ func stopSession(args []string, environment commandEnvironment) error {
 }
 
 func startSession(args []string, environment commandEnvironment) error {
-	started, err := environment.start(environment.repository, environment.config, args[0])
+	branch := args[0]
+	if len(args) == 2 {
+		branch = args[1]
+		plan, err := environment.plan(environment.repository, environment.config, branch)
+		if err != nil {
+			return err
+		}
+		return writeSessionPlan(environment.stdout, plan, true)
+	}
+	started, err := environment.start(environment.repository, environment.config, branch)
 	if err != nil {
 		return err
 	}
@@ -193,6 +215,110 @@ func startSession(args []string, environment commandEnvironment) error {
 	}
 	fmt.Fprintf(environment.stdout, "Started tmux session %s\n", started.Name)
 	return nil
+}
+
+func checkConfig(_ []string, environment commandEnvironment) error {
+	fmt.Fprintln(environment.stdout, "Configuration valid")
+	fmt.Fprintf(environment.stdout, "Path: %s\n", filepath.Join(environment.repository.MainCheckout, config.FileName))
+	fmt.Fprintf(environment.stdout, "Base branch: %s\n", environment.config.BaseBranch)
+	fmt.Fprintf(environment.stdout, "Commands: %d\n", len(environment.config.Commands))
+	fmt.Fprintf(environment.stdout, "Ports: %d\n", len(environment.config.Ports))
+	return nil
+}
+
+func inspectEnvironment(args []string, environment commandEnvironment) error {
+	plan, err := environment.plan(environment.repository, environment.config, args[0])
+	if err != nil {
+		return err
+	}
+	return writeSessionPlan(environment.stdout, plan, false)
+}
+
+func writeSessionPlan(output io.Writer, plan session.Plan, includeTmux bool) error {
+	fmt.Fprintf(output, "Branch: %s\nPath: %s\nSlot: %d\nSession: %s\n", plan.Branch, plan.Path, plan.Slot, plan.Name)
+	fmt.Fprintln(output, "Ports:")
+	portNames := sortedStringKeys(plan.Ports)
+	if len(portNames) == 0 {
+		fmt.Fprintln(output, "  (none)")
+	}
+	for _, name := range portNames {
+		fmt.Fprintf(output, "  %s=%d\n", name, plan.Ports[name])
+	}
+	fmt.Fprintln(output, "Windows:")
+	for index, window := range plan.Windows {
+		fmt.Fprintf(output, "  %s:\n", window.Name)
+		fmt.Fprintln(output, "    Environment:")
+		environmentNames := sortedStringKeys(window.Environment)
+		if len(environmentNames) == 0 {
+			fmt.Fprintln(output, "      (none)")
+		}
+		for _, name := range environmentNames {
+			fmt.Fprintf(output, "      %s=%s\n", name, window.Environment[name])
+		}
+		if !includeTmux {
+			continue
+		}
+		expanded := expandInjectedVariables(window.Command, window.Environment)
+		if expanded == "" {
+			expanded = "(interactive shell)"
+		}
+		fmt.Fprintf(output, "    Expanded command: %s\n", expanded)
+		arguments, err := json.Marshal(plan.TmuxArgs[index])
+		if err != nil {
+			return fmt.Errorf("encode tmux arguments: %w", err)
+		}
+		fmt.Fprintf(output, "    Tmux arguments: %s\n", arguments)
+	}
+	return nil
+}
+
+func sortedStringKeys[Value any](values map[string]Value) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func expandInjectedVariables(command string, environment map[string]string) string {
+	var result strings.Builder
+	for index := 0; index < len(command); {
+		if command[index] != '$' || index+1 >= len(command) {
+			result.WriteByte(command[index])
+			index++
+			continue
+		}
+		start := index
+		index++
+		if command[index] == '$' {
+			result.WriteString("$$")
+			index++
+			continue
+		}
+		braced := command[index] == '{'
+		if braced {
+			index++
+		}
+		nameStart := index
+		for index < len(command) && (command[index] == '_' || command[index] >= 'A' && command[index] <= 'Z' || command[index] >= 'a' && command[index] <= 'z' || index > nameStart && command[index] >= '0' && command[index] <= '9') {
+			index++
+		}
+		if index == nameStart || braced && (index >= len(command) || command[index] != '}') {
+			result.WriteString(command[start:index])
+			continue
+		}
+		name := command[nameStart:index]
+		if braced {
+			index++
+		}
+		if value, exists := environment[name]; exists {
+			result.WriteString(value)
+		} else {
+			result.WriteString(command[start:index])
+		}
+	}
+	return result.String()
 }
 
 func createWorktree(args []string, environment commandEnvironment) error {
@@ -322,6 +448,32 @@ func argumentError(spec commandSpec, actual int) string {
 	}
 
 	return fmt.Sprintf("%s accepts exactly one %s argument", spec.name, spec.arguments)
+}
+
+func validateArguments(spec commandSpec, args []string) string {
+	switch spec.name {
+	case "start":
+		if len(args) == 1 {
+			return ""
+		}
+		if len(args) == 2 && args[0] == "--dry-run" {
+			return ""
+		}
+		if len(args) == 2 {
+			return "start accepts exactly one <branch> argument"
+		}
+		return "start requires <branch> or --dry-run <branch>"
+	case "config":
+		if len(args) == 1 && args[0] == "check" {
+			return ""
+		}
+		return "config requires the check subcommand"
+	default:
+		if len(args) == spec.argCount {
+			return ""
+		}
+		return argumentError(spec, len(args))
+	}
 }
 
 func writeUsageError(stderr io.Writer, format string, args ...any) {

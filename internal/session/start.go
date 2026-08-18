@@ -20,18 +20,40 @@ type Started struct {
 	AlreadyRunning bool
 }
 
+type Plan struct {
+	Name     string
+	Branch   string
+	Path     string
+	Slot     int
+	Ports    map[string]int
+	Windows  []tmux.Window
+	TmuxArgs [][]string
+}
+
 func Start(repo repository.Repository, configuration config.Config, branch string) (Started, error) {
 	return start(repo, configuration, branch, tmux.NewClient())
 }
 
 func start(repo repository.Repository, configuration config.Config, branch string, client detachedStarter) (Started, error) {
-	worktrees, err := repository.ListWorktrees(repo)
+	plan, err := BuildPlan(repo, configuration, branch)
 	if err != nil {
 		return Started{}, err
 	}
+	alreadyRunning, err := client.StartDetached(plan.Name, plan.Windows)
+	if err != nil {
+		return Started{}, fmt.Errorf("start tmux session for branch %q: %w", branch, err)
+	}
+	return Started{Name: plan.Name, AlreadyRunning: alreadyRunning}, nil
+}
+
+func BuildPlan(repo repository.Repository, configuration config.Config, branch string) (Plan, error) {
+	worktrees, err := repository.ListWorktrees(repo)
+	if err != nil {
+		return Plan{}, err
+	}
 	state, err := allocation.NewStore(repo).Reconcile(worktrees)
 	if err != nil {
-		return Started{}, fmt.Errorf("reconcile worktree slots: %w", err)
+		return Plan{}, fmt.Errorf("reconcile worktree slots: %w", err)
 	}
 	for _, worktree := range worktrees {
 		if worktree.Branch != branch {
@@ -41,11 +63,11 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 		name := Name(repo, worktree)
 		slot, exists := state.Slots[branch]
 		if !exists {
-			return Started{}, fmt.Errorf("branch %q has no allocated slot", branch)
+			return Plan{}, fmt.Errorf("branch %q has no allocated slot", branch)
 		}
 		ports, err := allocation.CalculatePorts(configuration, slot)
 		if err != nil {
-			return Started{}, fmt.Errorf("calculate ports for branch %q: %w", branch, err)
+			return Plan{}, fmt.Errorf("calculate ports for branch %q: %w", branch, err)
 		}
 		labels := make([]string, 0, len(configuration.Commands))
 		for label := range configuration.Commands {
@@ -72,14 +94,17 @@ func start(repo repository.Repository, configuration config.Config, branch strin
 				Environment: environment,
 			})
 		}
-		alreadyRunning, err := client.StartDetached(name, windows)
+		tmuxArgs, err := tmux.StartArguments(name, windows)
 		if err != nil {
-			return Started{}, fmt.Errorf("start tmux session for branch %q: %w", branch, err)
+			return Plan{}, fmt.Errorf("build tmux arguments for branch %q: %w", branch, err)
 		}
-		return Started{Name: name, AlreadyRunning: alreadyRunning}, nil
+		return Plan{
+			Name: name, Branch: branch, Path: worktree.Path, Slot: slot,
+			Ports: ports, Windows: windows, TmuxArgs: tmuxArgs,
+		}, nil
 	}
 
-	return Started{}, fmt.Errorf("branch %q has no worktree", branch)
+	return Plan{}, fmt.Errorf("branch %q has no worktree", branch)
 }
 
 func cloneEnvironment(environment map[string]string) map[string]string {
