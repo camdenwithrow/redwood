@@ -136,5 +136,7 @@ rw stop feature/foo
 ```
 
 `rw list` prints one tab-separated row per worktree with its branch, slot,
-running state, calculated ports, and path. Redwood does not delete the worktree
-or branch when stopping a session.
+Redwood-managed session state, calculated ports, and path. `RW_SESSION` is
+`running` when that worktree has a Redwood-managed tmux session and `none`
+otherwise; it does not describe unrelated tmux sessions. Redwood does not
+delete the worktree or branch when stopping a session.

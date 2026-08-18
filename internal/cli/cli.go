@@ -240,7 +240,7 @@ func writeWorktreeList(output io.Writer, listed []worktreemanager.Info) error {
 
 	writer := csv.NewWriter(output)
 	writer.Comma = '\t'
-	if err := writer.Write([]string{"BRANCH", "SLOT", "RUNNING", "PORTS", "PATH"}); err != nil {
+	if err := writer.Write([]string{"BRANCH", "SLOT", "RW_SESSION", "PORTS", "PATH"}); err != nil {
 		return fmt.Errorf("write worktree list: %w", err)
 	}
 	for _, info := range sorted {
@@ -265,7 +265,7 @@ func worktreeFields(info worktreemanager.Info) []string {
 	if info.Slot != nil {
 		slot = strconv.Itoa(*info.Slot)
 	}
-	running := "stopped"
+	running := "none"
 	if info.Running {
 		running = "running"
 	}
