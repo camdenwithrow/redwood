@@ -18,6 +18,11 @@ type Config struct {
 	PortStride   int                `toml:"port_stride"`
 	Ports        map[string]int     `toml:"ports"`
 	Commands     map[string]Command `toml:"commands"`
+	Hooks        Hooks              `toml:"hooks"`
+}
+
+type Hooks struct {
+	PostCreate []string `toml:"post_create"`
 }
 
 type Command struct {
@@ -217,6 +222,12 @@ func (config Config) validate() error {
 					secondName,
 				)
 			}
+		}
+	}
+
+	for index, command := range config.Hooks.PostCreate {
+		if strings.TrimSpace(command) == "" {
+			return fmt.Errorf("hooks.post_create[%d] must not be empty", index)
 		}
 	}
 

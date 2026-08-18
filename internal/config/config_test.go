@@ -18,6 +18,9 @@ api = 8080
 [commands]
 web = "just dev-web"
 api = "just dev-server"
+
+[hooks]
+post_create = ["go mod download", "cp .env.example .env"]
 `
 
 func TestLoadValidConfig(t *testing.T) {
@@ -41,6 +44,9 @@ func TestLoadValidConfig(t *testing.T) {
 	}
 	if loaded.Commands["api"].Shell != "just dev-server" {
 		t.Fatalf("Load() api command = %+v", loaded.Commands["api"])
+	}
+	if got := loaded.Hooks.PostCreate; len(got) != 2 || got[0] != "go mod download" || got[1] != "cp .env.example .env" {
+		t.Fatalf("Load() post-create hooks = %v", got)
 	}
 }
 
@@ -150,6 +156,7 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		{name: "structured command with empty executable", content: strings.Replace(validConfig, "web = \"just dev-web\"", "web = { run = [\"\", \"argument\"] }", 1), want: "commands.web.run[0] must not be empty"},
 		{name: "structured command with invalid environment name", content: strings.Replace(validConfig, "web = \"just dev-web\"", "web = { run = [\"just\"], env = { \"BAD-NAME\" = \"value\" } }", 1), want: "invalid environment variable name"},
 		{name: "structured command with unknown port placeholder", content: strings.Replace(validConfig, "web = \"just dev-web\"", "web = { run = [\"just\"], env = { PORT = \"{ports.missing}\" } }", 1), want: `references unknown port "missing"`},
+		{name: "empty post-create hook", content: strings.Replace(validConfig, "go mod download", " ", 1), want: "hooks.post_create[0] must not be empty"},
 		{name: "port label without environment name", content: strings.Replace(validConfig, "web = 3000", "\"---\" = 3000", 1), want: "must contain at least one ASCII letter or digit"},
 		{name: "colliding port environment variables", content: strings.Replace(validConfig, "web = 3000", "web = 3000\n\"WEB\" = 3101", 1), want: "map to the same environment variable RW_PORT_WEB"},
 		{name: "port without command", content: strings.Replace(validConfig, "api = \"just dev-server\"\n", "", 1), want: "ports.api requires a matching commands.api entry"},

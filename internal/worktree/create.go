@@ -3,6 +3,8 @@ package worktree
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 
 	"github.com/camdenwithrow/redwood/internal/allocation"
 	"github.com/camdenwithrow/redwood/internal/config"
@@ -58,6 +60,20 @@ func Create(repo repository.Repository, configuration config.Config, branch stri
 	if err != nil {
 		return Created{}, rollback(fmt.Errorf("calculate worktree ports: %w", err))
 	}
+	for index, hook := range configuration.Hooks.PostCreate {
+		if err := runPostCreateHook(createdWorktree.Worktree.Path, hook); err != nil {
+			return Created{}, rollback(fmt.Errorf("run post-create hook %d %q: %w", index+1, hook, err))
+		}
+	}
 
 	return Created{Worktree: createdWorktree.Worktree, Slot: slot, Ports: ports}, nil
+}
+
+func runPostCreateHook(directory, hook string) error {
+	command := exec.Command("/bin/sh", "-c", hook)
+	command.Dir = directory
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	return command.Run()
 }
