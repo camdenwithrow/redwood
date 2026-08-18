@@ -128,6 +128,35 @@ func TestAttach(t *testing.T) {
 	}
 }
 
+func TestAttachSwitchesClientInsideTmux(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-session,1,0")
+	var got [][]string
+	attachCalled := false
+	client := NewClient()
+	client.run = func(args ...string) error {
+		got = append(got, append([]string(nil), args...))
+		return nil
+	}
+	client.attach = func(string) error {
+		attachCalled = true
+		return nil
+	}
+
+	if err := client.Attach("session"); err != nil {
+		t.Fatalf("Attach() error = %v", err)
+	}
+	want := [][]string{
+		{"has-session", "-t", "=session"},
+		{"switch-client", "-t", "=session"},
+	}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Fatalf("Attach() args = %v, want %v", got, want)
+	}
+	if attachCalled {
+		t.Fatal("Attach() called attach-session while already inside tmux")
+	}
+}
+
 func TestStop(t *testing.T) {
 	var got [][]string
 	client := Client{run: func(args ...string) error {

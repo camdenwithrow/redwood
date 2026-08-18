@@ -123,6 +123,10 @@ rw list
 rw attach feature/foo
 ```
 
+When invoked from inside tmux, `rw attach` switches the current client to the
+worktree's session instead of attempting a nested attachment. Use
+`tmux switch-client -l` to return to the previous session.
+
 Detach from the tmux session with tmux's configured detach binding, `Ctrl-b d`
 by default. The commands continue running after detaching. Stop the whole
 worktree session explicitly when it is no longer needed:

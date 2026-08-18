@@ -184,6 +184,7 @@ esac
 	environment := []string{
 		"PATH=" + tmuxDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"REDWOOD_TEST_TMUX_STATE=" + stateDirectory,
+		"TMUX=",
 	}
 
 	canonicalRoot, err := filepath.EvalSymlinks(projectRoot)

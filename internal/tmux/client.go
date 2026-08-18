@@ -10,8 +10,9 @@ import (
 )
 
 type Client struct {
-	run    func(args ...string) error
-	attach func(name string) error
+	run           func(args ...string) error
+	attach        func(name string) error
+	insideSession func() bool
 }
 
 type Window struct {
@@ -34,7 +35,13 @@ type SessionNotFoundError struct {
 }
 
 func NewClient() Client {
-	return Client{run: run, attach: attach}
+	return Client{
+		run:    run,
+		attach: attach,
+		insideSession: func() bool {
+			return os.Getenv("TMUX") != ""
+		},
+	}
 }
 
 func (client Client) Attach(name string) error {
@@ -44,6 +51,9 @@ func (client Client) Attach(name string) error {
 	}
 	if !running {
 		return SessionNotFoundError{Name: name}
+	}
+	if client.insideSession != nil && client.insideSession() {
+		return client.run("switch-client", "-t", "="+name)
 	}
 	return client.attach(name)
 }
