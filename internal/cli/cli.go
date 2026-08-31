@@ -21,7 +21,7 @@ type command func(args []string, environment commandEnvironment) error
 type repositoryFinder func() (repository.Repository, error)
 type configLoader func(repositoryRoot string) (config.Config, error)
 type baseBranchResolver func(repo repository.Repository, configured string) (string, error)
-type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string) (worktreemanager.Created, error)
+type worktreeCreator func(repo repository.Repository, configuration config.Config, branch string, copyEnv ...string) (worktreemanager.Created, error)
 type worktreeRemover func(repo repository.Repository, branch string) (repository.Worktree, error)
 type sessionStarter func(repo repository.Repository, configuration config.Config, branch string) (session.Started, error)
 type sessionPlanner func(repo repository.Repository, configuration config.Config, branch string) (session.Plan, error)
@@ -53,6 +53,7 @@ type commandEnvironment struct {
 	attach     sessionAttacher
 	stop       sessionStopper
 	list       worktreeLister
+	copyEnv    []string
 }
 
 type commandSpec struct {
@@ -76,6 +77,9 @@ Commands:
   attach <branch>  Attach to a worktree's tmux session
   stop <branch>    Stop a worktree's tmux session
   list             Show worktrees, ports, and running state
+
+Create options:
+  --copy-env <path>  Copy an env file from the main checkout (repeatable)
 
 Run "rw help" to show this message.
 `
@@ -134,6 +138,15 @@ func run(
 	}
 
 	commandArgs := args[1:]
+	var copyEnv []string
+	if spec.name == "create" {
+		var err error
+		commandArgs, copyEnv, err = parseCreateArguments(commandArgs)
+		if err != nil {
+			writeUsageError(stderr, "%v", err)
+			return 2
+		}
+	}
 	if message := validateArguments(*spec, commandArgs); message != "" {
 		fmt.Fprintf(stderr, "rw: %s\nUsage: rw %s", message, spec.name)
 		if spec.arguments != "" {
@@ -173,6 +186,7 @@ func run(
 		attach:     deps.attachSession,
 		stop:       deps.stopSession,
 		list:       deps.listWorktrees,
+		copyEnv:    copyEnv,
 	}
 	if err := spec.run(commandArgs, environment); err != nil {
 		fmt.Fprintf(stderr, "rw: %v\n", err)
@@ -258,7 +272,14 @@ func writeSessionPlan(output io.Writer, plan session.Plan, includeTmux bool) err
 		if !includeTmux {
 			continue
 		}
-		expanded := expandInjectedVariables(window.Command, window.Environment)
+		expanded := expandInjectedVariables(window.Shell, window.Environment)
+		if len(window.Arguments) > 0 {
+			arguments, err := json.Marshal(window.Arguments)
+			if err != nil {
+				return fmt.Errorf("encode command arguments: %w", err)
+			}
+			expanded = string(arguments)
+		}
 		if expanded == "" {
 			expanded = "(interactive shell)"
 		}
@@ -321,8 +342,36 @@ func expandInjectedVariables(command string, environment map[string]string) stri
 	return result.String()
 }
 
+func parseCreateArguments(args []string) (branches, copyEnv []string, err error) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--":
+			branches = append(branches, args[i+1:]...)
+			return branches, copyEnv, nil
+		case arg == "--copy-env":
+			if i+1 == len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "-") {
+				return nil, nil, fmt.Errorf("--copy-env requires a file path")
+			}
+			i++
+			copyEnv = append(copyEnv, args[i])
+		case strings.HasPrefix(arg, "--copy-env="):
+			path := strings.TrimPrefix(arg, "--copy-env=")
+			if path == "" {
+				return nil, nil, fmt.Errorf("--copy-env requires a file path")
+			}
+			copyEnv = append(copyEnv, path)
+		case strings.HasPrefix(arg, "-"):
+			return nil, nil, fmt.Errorf("unknown create option %q", arg)
+		default:
+			branches = append(branches, arg)
+		}
+	}
+	return branches, copyEnv, nil
+}
+
 func createWorktree(args []string, environment commandEnvironment) error {
-	created, err := environment.create(environment.repository, environment.config, args[0])
+	created, err := environment.create(environment.repository, environment.config, args[0], environment.copyEnv...)
 	if err != nil {
 		return err
 	}
@@ -330,6 +379,9 @@ func createWorktree(args []string, environment commandEnvironment) error {
 	fmt.Fprintf(environment.stdout, "Created worktree %s\n", created.Worktree.Branch)
 	fmt.Fprintf(environment.stdout, "Path: %s\n", created.Worktree.Path)
 	fmt.Fprintf(environment.stdout, "Slot: %d\n", created.Slot)
+	for _, path := range environment.copyEnv {
+		fmt.Fprintf(environment.stdout, "Copied env: %s\n", path)
+	}
 	if len(created.Ports) == 0 {
 		return nil
 	}
