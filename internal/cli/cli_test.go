@@ -242,7 +242,7 @@ func TestRunConfigCheckSummarizesValidatedConfiguration(t *testing.T) {
 	deps.loadConfig = func(string) (config.Config, error) {
 		return config.Config{
 			BaseBranch: "main",
-			Commands:   map[string]string{"api": "just api", "web": "just web"},
+			Commands:   map[string]config.Command{"api": {Shell: "just api"}, "web": {Shell: "just web"}},
 			Ports:      map[string]int{"api": 8080},
 		}, nil
 	}
@@ -315,6 +315,26 @@ func TestRunStartDryRunShowsExpandedCommandAndTmuxArguments(t *testing.T) {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("run() stdout = %q, want it to contain %q", stdout.String(), want)
 		}
+	}
+}
+
+func TestRunStartDryRunPreservesStructuredArguments(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.planSession = func(repository.Repository, config.Config, string) (session.Plan, error) {
+		plan := inspectionPlan()
+		plan.Windows[0].Shell = ""
+		plan.Windows[0].Arguments = []string{"tool", "--literal", "$RW_PORT", "two words"}
+		var err error
+		plan.TmuxArgs, err = tmux.StartArguments(plan.Name, plan.Windows)
+		return plan, err
+	}
+	code := run([]string{"start", "--dry-run", "feature/a"}, &stdout, &stderr, deps)
+	if code != 0 {
+		t.Fatalf("run() = %d, stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `Expanded command: ["tool","--literal","$RW_PORT","two words"]`) {
+		t.Fatalf("structured argument boundaries or literal variables changed: %q", stdout.String())
 	}
 }
 
@@ -475,7 +495,7 @@ func inspectionPlan() session.Plan {
 		Ports:  map[string]int{"web": 3200, "api": 8280},
 		Windows: []tmux.Window{{
 			Name:      "api",
-			Command:   "just api --port $RW_PORT --web ${RW_PORT_WEB} --token $TOKEN",
+			Shell:     "just api --port $RW_PORT --web ${RW_PORT_WEB} --token $TOKEN",
 			Directory: "/repo-feature-a",
 			Environment: map[string]string{
 				"RW_PORT": "8280", "RW_PORT_API": "8280", "RW_PORT_WEB": "3200",

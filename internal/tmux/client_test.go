@@ -78,8 +78,8 @@ func TestStartDetachedRequiresWindow(t *testing.T) {
 
 func TestStartArgumentsReturnsExactCommandsWithoutRunningTmux(t *testing.T) {
 	windows := []Window{
-		{Name: "api", Command: "just api", Directory: "/repo", Environment: map[string]string{"Z": "last", "A": "first"}},
-		{Name: "web", Command: "just web", Directory: "/repo"},
+		{Name: "api", Shell: "just api", Directory: "/repo", Environment: map[string]string{"Z": "last", "A": "first"}},
+		{Name: "web", Shell: "just web", Directory: "/repo"},
 	}
 
 	got, err := StartArguments("session", windows)

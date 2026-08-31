@@ -272,7 +272,14 @@ func writeSessionPlan(output io.Writer, plan session.Plan, includeTmux bool) err
 		if !includeTmux {
 			continue
 		}
-		expanded := expandInjectedVariables(window.Command, window.Environment)
+		expanded := expandInjectedVariables(window.Shell, window.Environment)
+		if len(window.Arguments) > 0 {
+			arguments, err := json.Marshal(window.Arguments)
+			if err != nil {
+				return fmt.Errorf("encode command arguments: %w", err)
+			}
+			expanded = string(arguments)
+		}
 		if expanded == "" {
 			expanded = "(interactive shell)"
 		}
