@@ -12,8 +12,10 @@ detached tmux sessions, and optional stable development ports.
 - Any tools referenced by the project's configured commands, such as `just` or
   Doppler.
 
-Redwood does not load or store secrets. Put secret management in the configured
-command, such as `doppler run -- just dev-server`, when the project needs it.
+Redwood does not parse environment files or inject their values into commands.
+For secret management, use a configured command such as
+`doppler run -- just dev-server`. Projects using local environment files can
+explicitly copy them into new worktrees with `rw create --copy-env`.
 
 ## Installation
 
@@ -144,7 +146,8 @@ Each worktree receives a stable numeric slot, allowing the same command set to
 run in several worktrees without port conflicts. Base ports must have different
 remainders when divided by `port_stride`, which prevents one command's port in
 one slot from colliding with another command in a different slot. Redwood only
-supplies these port variables; Doppler remains responsible for secrets.
+supplies these port variables; your application or secret manager remains
+responsible for loading secrets.
 
 The configuration fields are:
 
@@ -179,6 +182,39 @@ rw attach feature/foo   Attach to its tmux session
 rw stop feature/foo     Stop its tmux session
 rw list                 Show worktrees, ports, and running state
 ```
+
+### Copy local environment files
+
+Environment files are not copied by default. Repeat `--copy-env` to copy specific
+files when creating a worktree:
+
+```sh
+rw create feature/foo --copy-env .env --copy-env apps/api/.env.local
+```
+
+Paths are relative to the main checkout, even when the command runs from a linked
+worktree. Each file is copied to the same relative path in the new worktree. The
+option also accepts `--copy-env=.env` and can appear before or after the branch.
+
+Copying finishes before post-create hooks run, so setup commands can use the
+files. Hooks can modify the copies and stream their own output; avoid hooks that
+print secrets or overwrite settings you intend to preserve.
+
+- Only explicitly listed regular files are copied; there is no glob expansion or
+  automatic discovery. Absolute paths, `..` components, `.git` components, and
+  symlinks in file or directory paths are rejected.
+- Each destination must be Git-ignored in the new worktree and must not already
+  exist. Commit the appropriate `.gitignore` rules on the target branch first.
+- Copies use owner-only read/write permissions (`0600`). New parent directories
+  use owner-only permissions (`0700`). Output reports paths, never file contents.
+- Missing files or copy failures fail creation and trigger rollback of the new
+  worktree and slot allocation. A branch created by this operation is removed;
+  a pre-existing branch is retained. Rollback errors are reported if cleanup fails.
+
+Copying duplicates any credentials in these files on disk. Copies are independent
+snapshots: Redwood does not synchronize them, expand variables, or rewrite ports
+and URLs. Check that copied settings suit the new worktree; use the existing
+`RW_PORT` and `RW_PORT_<LABEL>` variables for worktree-specific service ports.
 
 ## Core workflow
 

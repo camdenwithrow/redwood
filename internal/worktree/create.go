@@ -17,7 +17,7 @@ type Created struct {
 	Ports    map[string]int
 }
 
-func Create(repo repository.Repository, configuration config.Config, branch string) (Created, error) {
+func Create(repo repository.Repository, configuration config.Config, branch string, copyEnv ...string) (Created, error) {
 	store := allocation.NewStore(repo)
 	previousState, err := store.Load()
 	if err != nil {
@@ -59,6 +59,9 @@ func Create(repo repository.Repository, configuration config.Config, branch stri
 	ports, err := allocation.CalculatePorts(configuration, slot)
 	if err != nil {
 		return Created{}, rollback(fmt.Errorf("calculate worktree ports: %w", err))
+	}
+	if err := copyEnvFiles(repo.MainCheckout, createdWorktree.Worktree.Path, copyEnv); err != nil {
+		return Created{}, rollback(err)
 	}
 	for index, hook := range configuration.Hooks.PostCreate {
 		if err := runPostCreateHook(createdWorktree.Worktree.Path, hook); err != nil {

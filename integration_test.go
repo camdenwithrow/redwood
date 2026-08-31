@@ -36,6 +36,39 @@ func TestCreateCommandInTemporaryRepository(t *testing.T) {
 	}
 }
 
+func TestCreateCopiesEnvFromMainWhenInvokedInLinkedWorktree(t *testing.T) {
+	project := newTestProject(t)
+	writeFile(t, filepath.Join(project.repository, ".gitignore"), ".env\n.env.local\n")
+	gitOutput(t, project.repository, "add", ".gitignore")
+	gitOutput(t, project.repository, "-c", "user.name=Redwood Tests", "-c", "user.email=redwood@example.com", "commit", "-m", "Ignore env files")
+	mainContent := "TOKEN=fake-main-value\nPORT=3000\n"
+	writeFile(t, filepath.Join(project.repository, ".env"), mainContent)
+	if err := os.MkdirAll(filepath.Join(project.repository, "apps/api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(project.repository, "apps/api/.env.local"), "API_TOKEN=fake-api-value\n")
+	project.run(t, "create", "feature/source")
+	sourcePath := filepath.Join(filepath.Dir(project.repository), "project-feature-source")
+	writeFile(t, filepath.Join(sourcePath, ".env"), "TOKEN=fake-linked-value\n")
+
+	output := project.runFrom(t, sourcePath, "create", "feature/env", "--copy-env", ".env", "--copy-env=apps/api/.env.local")
+	targetPath := filepath.Join(filepath.Dir(project.repository), "project-feature-env")
+	data, err := os.ReadFile(filepath.Join(targetPath, ".env"))
+	if err != nil || string(data) != mainContent {
+		t.Fatalf("copy did not use main checkout: %v", err)
+	}
+	data, err = os.ReadFile(filepath.Join(targetPath, "apps/api/.env.local"))
+	if err != nil || string(data) != "API_TOKEN=fake-api-value\n" {
+		t.Fatalf("nested env file was not copied: %v", err)
+	}
+	if strings.Contains(output, "fake-") || !strings.Contains(output, "Copied env: .env") {
+		t.Fatalf("unexpected create output: %q", output)
+	}
+	if status := gitOutput(t, targetPath, "status", "--porcelain"); status != "" {
+		t.Fatalf("env copies are not ignored: %q", status)
+	}
+}
+
 func TestPortlessProjectCreatesInteractiveSession(t *testing.T) {
 	project := newTestProject(t)
 	writeFile(t, filepath.Join(project.repository, "redwood.toml"), `base_branch = "main"

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -39,6 +40,12 @@ func TestRunUsageErrors(t *testing.T) {
 		{name: "missing command", want: "rw: no command provided"},
 		{name: "unknown command", args: []string{"launch"}, want: `rw: unknown command "launch"`},
 		{name: "missing branch", args: []string{"create"}, want: "rw: create requires <branch>"},
+		{name: "extra create branch", args: []string{"create", "one", "two", "--copy-env", ".env"}, want: "rw: create accepts exactly one <branch> argument"},
+		{name: "missing env path", args: []string{"create", "feature/a", "--copy-env"}, want: "--copy-env requires a file path"},
+		{name: "empty env path", args: []string{"create", "feature/a", "--copy-env="}, want: "--copy-env requires a file path"},
+		{name: "option instead of env path", args: []string{"create", "feature/a", "--copy-env", "--copy-env", ".env"}, want: "--copy-env requires a file path"},
+		{name: "unknown create option", args: []string{"create", "feature/a", "--copy-en"}, want: "unknown create option"},
+		{name: "copy without branch", args: []string{"create", "--copy-env", ".env"}, want: "rw: create requires <branch>"},
 		{name: "extra branch", args: []string{"start", "one", "two"}, want: "rw: start accepts exactly one <branch> argument"},
 		{name: "missing remove branch", args: []string{"remove"}, want: "rw: remove requires <branch>"},
 		{name: "list argument", args: []string{"list", "feature/a"}, want: "rw: list does not accept arguments"},
@@ -96,7 +103,7 @@ func TestRunCreatePrintsWorktreeDetails(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	deps := successfulDependencies()
-	deps.createWorktree = func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
+	deps.createWorktree = func(repository.Repository, config.Config, string, ...string) (worktreemanager.Created, error) {
 		return worktreemanager.Created{
 			Worktree: repository.Worktree{Path: "/repo-feature-a", Branch: "feature/a"},
 			Slot:     2,
@@ -119,7 +126,7 @@ func TestRunCreateOmitsPortsWhenNoneAreConfigured(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	deps := successfulDependencies()
-	deps.createWorktree = func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
+	deps.createWorktree = func(repository.Repository, config.Config, string, ...string) (worktreemanager.Created, error) {
 		return worktreemanager.Created{
 			Worktree: repository.Worktree{Path: "/repo-feature-a", Branch: "feature/a"},
 			Slot:     2,
@@ -134,6 +141,46 @@ func TestRunCreateOmitsPortsWhenNoneAreConfigured(t *testing.T) {
 	want := "Created worktree feature/a\nPath: /repo-feature-a\nSlot: 2\n"
 	if stdout.String() != want {
 		t.Fatalf("run() stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRunCreatePassesEnvPaths(t *testing.T) {
+	tests := [][]string{
+		{"create", "feature/a", "--copy-env", ".env", "--copy-env", "apps/api/.env.local"},
+		{"create", "--copy-env", ".env", "feature/a", "--copy-env=apps/api/.env.local"},
+		{"create", "--copy-env=.env", "--copy-env", "apps/api/.env.local", "--", "feature/a"},
+	}
+	for _, args := range tests {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			deps := successfulDependencies()
+			called := false
+			deps.createWorktree = func(_ repository.Repository, _ config.Config, branch string, paths ...string) (worktreemanager.Created, error) {
+				called = true
+				if branch != "feature/a" || !reflect.DeepEqual(paths, []string{".env", "apps/api/.env.local"}) {
+					t.Fatalf("create called with branch %q, paths %v", branch, paths)
+				}
+				return worktreemanager.Created{Worktree: repository.Worktree{Branch: branch}}, nil
+			}
+			if code := run(args, &stdout, &stderr, deps); code != 0 || !called {
+				t.Fatalf("run() = %d, called = %v, stderr = %q", code, called, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), "Copied env: .env\nCopied env: apps/api/.env.local\n") {
+				t.Fatalf("missing copied paths in output: %q", stdout.String())
+			}
+		})
+	}
+}
+
+func TestRunCreateCopyFailureDoesNotReportSuccess(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	deps := successfulDependencies()
+	deps.createWorktree = func(repository.Repository, config.Config, string, ...string) (worktreemanager.Created, error) {
+		return worktreemanager.Created{}, errors.New("copy env: destination is not Git-ignored")
+	}
+	code := run([]string{"create", "feature/a", "--copy-env", ".env"}, &stdout, &stderr, deps)
+	if code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "not Git-ignored") {
+		t.Fatalf("run() = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 }
 
@@ -397,7 +444,7 @@ func successfulDependencies() runtimeDependencies {
 		resolveBaseBranch: func(repository.Repository, string) (string, error) {
 			return "main", nil
 		},
-		createWorktree: func(repository.Repository, config.Config, string) (worktreemanager.Created, error) {
+		createWorktree: func(repository.Repository, config.Config, string, ...string) (worktreemanager.Created, error) {
 			return worktreemanager.Created{}, nil
 		},
 		removeWorktree: func(repository.Repository, string) (repository.Worktree, error) {

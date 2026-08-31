@@ -36,6 +36,24 @@ Use the paths printed by `rw create`; do not infer them when a command can provi
 
 Make changes, test, commit, and push inside each corresponding worktree. Keep unrelated tasks on separate branches and do not mix their diffs.
 
+### Copy local environment files
+
+When the task calls for copying local environment files, add one `--copy-env` option per file during creation:
+
+```sh
+rw create feature/first-change --copy-env .env --copy-env apps/api/.env.local
+```
+
+Check `rw help` for `--copy-env` support before using it with an older installation. Copying is disabled by default; do not infer that every worktree needs credentials or scan for additional files to copy.
+
+Paths are relative to the main checkout, even when invoked from a linked worktree, and are copied to the same relative paths in the new worktree. Files must be regular files; symlinks in file or directory paths, absolute paths, `..` components, and `.git` components are rejected. Destinations must not exist and must be Git-ignored under the destination branch's rules. If a file is missing or an ignore rule is absent, report the cause instead of bypassing these checks.
+
+Copies have owner-only permissions (`0600`); new parent directories use `0700`. Redwood reports paths without displaying file contents. Copy errors trigger rollback of the new worktree and slot allocation; pre-existing branches are retained. If rollback reports errors, inspect the reported state before retrying.
+
+Copying finishes before post-create hooks run. Hooks can read or modify the copies and stream their own output; avoid hooks that print secrets or overwrite settings you intend to preserve.
+
+Copies duplicate any credentials on disk and are independent snapshots. Redwood does not load, synchronize, or rewrite their values. Keep secret loading in the application or configured secret-manager command, and use `RW_PORT` and `RW_PORT_<LABEL>` for worktree-specific ports rather than assuming copied ports and URLs are correct.
+
 ## Manage sessions
 
 Start and enter a worktree session with:
